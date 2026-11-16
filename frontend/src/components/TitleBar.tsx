@@ -1,6 +1,7 @@
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useAppContext } from "../contexts/AppContext";
-import { TbLayoutColumns, TbSettings, TbMinus, TbX, TbSearch } from "react-icons/tb";
+import { TbLayoutColumns, TbLayoutGrid, TbSettings, TbMinus, TbX, TbSearch } from "react-icons/tb";
+import logoUrl from "../assets/canopy-logo.png";
 
 // Guard: Tauri APIs are only available inside Tauri webview, not in plain browser
 const isTauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
@@ -10,7 +11,7 @@ const safeCall = (fn: () => void) => {
 };
 
 export function TitleBar() {
-  const { toggleCommandPalette } = useAppContext();
+  const { state, toggleCommandPalette, toggleLayout } = useAppContext();
 
   const handleDrag = (e: React.PointerEvent) => {
     if (e.buttons === 1) {
@@ -25,7 +26,7 @@ export function TitleBar() {
     >
       <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
         <div className="logo" style={{ pointerEvents: "none" }}>
-          <div className="logo-dot" />
+          <img className="logo-img" src={logoUrl} alt="" draggable={false} />
           canopy
         </div>
         <span
@@ -45,8 +46,13 @@ export function TitleBar() {
         style={{ display: "flex", alignItems: "center", gap: "2px" }}
         onPointerDown={(e) => e.stopPropagation()}
       >
-        <button className="tb-btn" aria-label="layout">
-          <TbLayoutColumns />
+        <button
+          className="tb-btn"
+          aria-label="toggle layout"
+          title={state.layout === 'grid' ? 'Switch to row layout' : 'Switch to grid layout'}
+          onClick={toggleLayout}
+        >
+          {state.layout === 'grid' ? <TbLayoutColumns /> : <TbLayoutGrid />}
         </button>
         <button className="tb-btn" aria-label="settings">
           <TbSettings />
