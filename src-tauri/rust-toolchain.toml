@@ -1,0 +1,6 @@
+# Pin the Rust toolchain so local builds and CI use the same compiler and Clippy.
+# Bump deliberately (and fix any new Clippy lints) rather than drifting with `stable`.
+[toolchain]
+channel = "1.100.0"
+components = ["clippy", "rustfmt"]
+profile = "minimal"

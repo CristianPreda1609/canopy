@@ -41,6 +41,7 @@ Before finishing a change, run what CI runs for whatever you touched: `npm run l
 - Keep Rust types and TS types in sync: `FileNode` ↔ `TreeNode`, `GitStatus` ↔ `GitStatus` (note the serde renames `type`, `iconType`, `compactPath`).
 - Styling is vanilla CSS with variables in `index.css`. Don't add a CSS framework. Icons come from `react-icons/tb` (Tabler).
 - **Cross-platform:** OS-specific process spawning lives in the "Platform integration" section of `lib.rs`, uses `cfg!(target_os = ...)` with a fallback list via `spawn_first`. Never hardcode `\` or `/` in frontend paths; use `services/paths.ts` (`resolveTreePath`, `parentDir`, `fileManagerName`).
+- The Rust toolchain is pinned in `src-tauri/rust-toolchain.toml` (CI uses the same file). To upgrade, bump it, then fix any new Clippy lints before pushing.
 - `macOSPrivateApi` is on (Cargo feature `macos-private-api`) for the transparent window. Keep both in sync.
 
 ## Never commit

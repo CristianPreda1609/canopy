@@ -129,7 +129,7 @@ canopy/
 | Requirement | Notes |
 |-------------|-------|
 | [Node.js](https://nodejs.org/) **22.18+** (24 recommended) and npm | For the frontend toolchain. `npm test` relies on native TypeScript support |
-| [Rust](https://rustup.rs/) **1.77.2+** (stable) | |
+| [Rust](https://rustup.rs/) via rustup | The exact version is pinned in `src-tauri/rust-toolchain.toml` (currently 1.100.0), and rustup installs it automatically |
 | [Tauri CLI](https://tauri.app/reference/cli/) | `cargo install tauri-cli --version "^2"` |
 | *Optional:* [VS Code](https://code.visualstudio.com/) with `code` on your `PATH` | Needed for "Open in VS Code" |
 | *Optional:* [Git](https://git-scm.com/) on your `PATH` | Needed for git status info |

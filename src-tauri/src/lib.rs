@@ -123,8 +123,8 @@ fn build_tree(path: &Path, current_depth: usize, max_depth: usize) -> Result<Vec
     }
 
     // Sort alphabetically: folders first, then files
-    dirs.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
-    files.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+    dirs.sort_by_key(|n| n.name.to_lowercase());
+    files.sort_by_key(|n| n.name.to_lowercase());
 
     let mut result = dirs;
     result.extend(files);
