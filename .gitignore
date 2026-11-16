@@ -11,6 +11,3 @@ Thumbs.db
 
 # Logs
 *.log
-
-# Local Claude Code instructions (not shared)
-CLAUDE.local.md
