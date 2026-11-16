@@ -43,7 +43,8 @@ Canopy is built with **[Tauri 2](https://tauri.app/)**, so it uses a native Rust
 ## Features
 
 - 📂 **Multi-panel workspace**: open any number of project folders, each in its own panel.
-- 🌲 **Fast recursive file tree**: folders come first and everything is sorted alphabetically. Heavy directories such as `node_modules`, `target` and `.git` are skipped automatically.
+- 🌲 **Fast, lazy file tree**: only the first few levels load up front, and deeper folders load when you expand them, so huge repos open instantly. Folders come first, sorted alphabetically. Heavy folders such as `node_modules` and `target` aren't scanned until you open them.
+- ⚙️ **Settings**: scan depth, hidden files, and which folders to skip.
 - 🗜️ **Compact folders**: chains of single-child folders are merged into one row (`src / main / java`), the same way VS Code does it.
 - 🔄 **Live reload**: a file watcher on each panel refreshes the tree when files are created, modified or deleted.
 - 🌿 **Git integration**: shows the current branch and whether there are uncommitted changes, and colors each file by its git status.
@@ -267,7 +268,7 @@ Copy `icons/64x64.png` to `frontend/public/favicon.png` and `icons/128x128.png` 
 | Open in Explorer / Finder / file manager | Open the containing folder  |
 | Reveal in Explorer / Finder / file manager | Show the item selected in its folder |
 | Toggle layout          | Switch between grid and row layout (also the title bar button) |
-| Settings               | *(placeholder, not implemented yet)*             |
+| Settings               | Open the settings dialog (also the ⚙ title bar button) |
 
 ### Context Menu
 
@@ -321,7 +322,7 @@ sequenceDiagram
 **What happens when you add a project:**
 
 1. `pickFolder()` opens the native folder dialog through `tauri-plugin-dialog`.
-2. `read_directory` scans the folder (up to 8 levels deep) and returns a compacted JSON tree.
+2. `read_directory` scans the folder up to the configured **scan depth** (default 3) and returns a compacted JSON tree. Folders beyond that come back marked `unloaded`, and expanding one calls `read_directory` again on just that folder (lazy loading).
 3. `get_git_info` runs `git status --porcelain=v1 -b`, which gives both the branch and the status of each file. It also works in worktrees and submodules. If git isn't installed, the panel simply shows no git info.
 4. `watch_directory` starts a recursive `notify` watcher. It ignores changes inside skipped folders (`node_modules`, `target`, `.git/objects`, …), but reacts to `.git/index` and `.git/HEAD` so the git colors update when you stage or switch branches. It emits `file_changed` at most every 200ms, and the frontend debounces that and re-reads the panel.
 5. The panel's path is saved to `localStorage` under the key `canopy_panels`.
@@ -332,7 +333,8 @@ All commands live in `src-tauri/src/lib.rs` and return `Result<T, String>`.
 
 | Command | Arguments | Returns | Description |
 |---------|-----------|---------|-------------|
-| `read_directory` | `path` | `FileNode[]` | Recursive scan (max depth 8), sorted and compacted |
+| `read_directory` | `path`, `depth?`, `showHidden?`, `skipDirs?` | `FileNode[]` | Scan `depth` levels (default 3, max 12), sorted and compacted. Deeper and skipped folders return `unloaded: true` |
+| `default_skip_dirs` | – | `string[]` | The built-in list of skipped folders |
 | `get_git_info` | `path` | `GitStatus \| null` | Branch, dirty flag and per-file status. Returns `null` if the folder isn't a repository |
 | `watch_directory` | `panelId`, `path` | `()` | Starts a recursive watcher that emits `file_changed` |
 | `unwatch_directory` | `panelId` | `()` | Stops the panel's watcher |
@@ -363,10 +365,12 @@ type GitStatus = {
 ### Directory Scanning Rules
 
 - **Hidden entries**: anything whose name starts with `.` is skipped.
-- **Heavy directories**: these folders are listed but never scanned, so they always appear empty:
+- **Skipped folders**: these are listed but only scanned when you expand them. The built-in list can be customized in Settings:
   `node_modules`, `target`, `.git`, `__pycache__`, `.venv`, `venv`, `.idea`, `.vscode`, `dist`, `build`, `.next`, `.cache`, `vendor`, `packages`, `.svn`, `obj`, `bin`
 - **Unreadable folders** (for example, permission denied) appear empty instead of breaking the tree.
-- **Max depth**: 8 levels.
+- **Scan depth**: 3 levels by default (configurable from 1 to 12). Deeper folders load on demand.
+- **Compaction**: chains of single-folder directories (`a/b/c`) are shown as one row, `a / b / c`. A folder that hasn't loaded yet is never merged into such a chain.
+- **Refresh**: when files change, the panel is rescanned. Folders you'd expanded deeper than the scan depth are fetched again, so they stay up to date.
 - **Sorting**: folders first, then files, alphabetically and case-insensitive.
 - **Icons**: the file extension determines `iconType` (for example `.py` → `py` and `.yml` → `config`).
 
@@ -396,8 +400,10 @@ A strict **Content Security Policy** is also set in `tauri.conf.json`. It allows
 - [x] Cross-platform support (Windows, macOS, Linux)
 - [x] Layout toggle
 - [x] CI on all three OSes, plus automated release builds
-- [ ] **Settings** panel (the button is still a placeholder). Planned: skipped directories, max depth, theme.
-- [ ] Load very large folders lazily instead of scanning them all at once.
+- [x] Settings panel (scan depth, hidden files, skipped folders)
+- [x] Lazy loading of deep and skipped folders
+- [ ] Keyboard shortcuts: tree navigation, shortcut hints and file search
+- [ ] Auto-updater
 - [ ] Sign and notarize the macOS builds.
 
 ---

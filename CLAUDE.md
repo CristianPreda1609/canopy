@@ -52,11 +52,14 @@ Before finishing a change, run what CI runs for whatever you touched: `npm run l
 ## Known issues / TODO
 
 - Icons: the source is `src-tauri/app-icon.png`. Regenerate with `cargo tauri icon app-icon.png`, then copy into `frontend/public/favicon.png` and `frontend/src/assets/canopy-logo.png`.
-- No Settings panel yet (the title bar button is a placeholder).
 - macOS release builds are unsigned.
 - The demo panels in `AppContext.tsx` are intentional: they only show in browser-only mode (`!isTauri`).
 
 ## Path conventions (frontend)
+
+- Pure tree logic lives in `contexts/tree.ts` (tested in `tree.test.ts`). Keep React and Tauri out of it.
+- Lazy loading: folders beyond the scan depth or in the skip list arrive `unloaded` (no `children`). `toggleNodeCollapse` fetches them; `refreshPanel` re-fetches expanded deep folders via the `stale` list from `mergeTreeState`.
+- Settings (`contexts/settings.ts`) are persisted in localStorage `canopy_settings` and always go through `normalizeSettings`.
 
 - Tree paths are `"<rootName>/<rel/path>"` with `/` separators. Compacted folders hide intermediate dirs in `compactPath`, and TreeView adds them back into the real path (`realParent`). Never rebuild filesystem paths from `node.name` alone.
 - Git file paths are relative to the panel root. Match them exactly against the tree path minus the root segment.

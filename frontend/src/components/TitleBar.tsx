@@ -11,7 +11,7 @@ const safeCall = (fn: () => void) => {
 };
 
 export function TitleBar() {
-  const { state, toggleCommandPalette, toggleLayout } = useAppContext();
+  const { state, toggleCommandPalette, toggleLayout, toggleSettings } = useAppContext();
 
   const handleDrag = (e: React.PointerEvent) => {
     if (e.buttons === 1) {
@@ -54,7 +54,7 @@ export function TitleBar() {
         >
           {state.layout === 'grid' ? <TbLayoutColumns /> : <TbLayoutGrid />}
         </button>
-        <button className="tb-btn" aria-label="settings">
+        <button className="tb-btn" aria-label="settings" title="Settings" onClick={toggleSettings}>
           <TbSettings />
         </button>
         <button

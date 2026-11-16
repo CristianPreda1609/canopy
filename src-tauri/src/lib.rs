@@ -19,6 +19,23 @@ pub struct FileNode {
     icon_type: Option<String>,
     #[serde(rename = "compactPath", skip_serializing_if = "Option::is_none")]
     compact_path: Option<String>,
+    /// Folder whose contents haven't been scanned yet (beyond the scan depth,
+    /// or a skipped directory). The frontend loads it on expand.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    unloaded: bool,
+}
+
+/// Options for scanning a directory, coming from the user's settings.
+pub struct ScanOptions {
+    pub max_depth: usize,
+    pub show_hidden: bool,
+    pub skip_dirs: Vec<String>,
+}
+
+impl ScanOptions {
+    fn skips(&self, name: &str) -> bool {
+        self.skip_dirs.iter().any(|d| d == name)
+    }
 }
 
 #[derive(Serialize, Clone)]
@@ -34,10 +51,15 @@ pub struct GitStatus {
     pub files: Vec<GitFileInfo>, // Adăugăm lista de fișiere
 }
 
+/// Levels loaded per request when the frontend doesn't say otherwise
+const DEFAULT_SCAN_DEPTH: usize = 3;
+/// Hard cap on levels per request, to keep a single scan bounded
+const MAX_SCAN_DEPTH: usize = 12;
+
 /// Minimum time between `file_changed` events for one panel
 const EMIT_THROTTLE: Duration = Duration::from_millis(200);
 
-/// Directories to skip when scanning the filesystem
+/// Default directories that are listed but not scanned (expandable on demand)
 const SKIP_DIRS: &[&str] = &[
     "node_modules", "target", ".git", "__pycache__", ".venv", "venv",
     ".idea", ".vscode", "dist", "build", ".next", ".cache",
@@ -60,12 +82,13 @@ fn get_icon_type(filename: &str) -> Option<String> {
     }
 }
 
-fn build_tree(path: &Path, current_depth: usize, max_depth: usize) -> Result<Vec<FileNode>, String> {
-    if current_depth >= max_depth {
-        return Ok(vec![]);
-    }
-    
+fn folder(name: String, children: Option<Vec<FileNode>>, unloaded: bool) -> FileNode {
+    FileNode { name, node_type: "folder".into(), children, icon_type: None, compact_path: None, unloaded }
+}
 
+/// Scan `path` up to `opts.max_depth` levels. Folders at the depth limit and
+/// skipped folders are returned with `unloaded: true` and no children.
+fn build_tree(path: &Path, current_depth: usize, opts: &ScanOptions) -> Result<Vec<FileNode>, String> {
     let read_dir = std::fs::read_dir(path)
         .map_err(|e| format!("Failed to read directory {}: {}", path.display(), e))?;
 
@@ -77,47 +100,29 @@ fn build_tree(path: &Path, current_depth: usize, max_depth: usize) -> Result<Vec
         let Ok(entry) = entry else { continue };
         let name = entry.file_name().to_string_lossy().to_string();
 
-        // Skip hidden files/dirs
-        if name.starts_with('.') {
+        if !opts.show_hidden && name.starts_with('.') {
             continue;
         }
 
-        let metadata = match entry.metadata() {
-            Ok(m) => m,
-            Err(_) => continue, // Skip files we can't read
-        };
+        let Ok(metadata) = entry.metadata() else { continue };
 
         if metadata.is_dir() {
-            // Skip common non-useful directories
-            if SKIP_DIRS.contains(&name.as_str()) {
-                dirs.push(FileNode {
-                    name,
-                    node_type: "folder".into(),
-                    children: Some(vec![]), // empty — collapsed by default
-                    icon_type: None,
-                    compact_path: None,
-                });
+            if opts.skips(&name) || current_depth + 1 >= opts.max_depth {
+                dirs.push(folder(name, None, true));
                 continue;
             }
-
             // An unreadable subfolder (e.g. permission denied) shows up empty
             // instead of failing the whole tree
-            let children = build_tree(&entry.path(), current_depth + 1, max_depth)
-                .unwrap_or_default();
-            dirs.push(FileNode {
-                name,
-                node_type: "folder".into(),
-                children: Some(children),
-                icon_type: None,
-                compact_path: None,
-            });
+            let children = build_tree(&entry.path(), current_depth + 1, opts).unwrap_or_default();
+            dirs.push(folder(name, Some(children), false));
         } else {
             files.push(FileNode {
-                name: name.clone(),
+                icon_type: get_icon_type(&name),
+                name,
                 node_type: "file".into(),
                 children: None,
-                icon_type: get_icon_type(&name),
                 compact_path: None,
+                unloaded: false,
             });
         }
     }
@@ -129,40 +134,52 @@ fn build_tree(path: &Path, current_depth: usize, max_depth: usize) -> Result<Vec
     let mut result = dirs;
     result.extend(files);
     Ok(result)
-    
 }
 
-fn compact_tree(nodes: Vec<FileNode>, prefix: &str) -> Vec<FileNode> {
-    nodes.into_iter().map(|mut node| {
-        if node.node_type == "folder" {
-            if let Some(children) = node.children.take() {
-                // verificam daca are exact un singur copil care e folder
-                let only_folders: Vec<&FileNode> = children.iter()
-                    .filter(|n| n.node_type == "folder")
-                    .collect();
-                let has_files = children.iter().any(|n| n.node_type == "file");
-
-                if only_folders.len() == 1 && !has_files {
-                    // compactam: combinam numele
-                    let child = children.into_iter().next().unwrap();
-                    let compact_label = format!("{}{} / ", prefix, node.name);
-                    let mut compacted = child;
-                    compacted.compact_path = Some(compact_label.clone());
-                    compacted.children = compacted.children.map(|c| compact_tree(c, &compact_label));
-                    return compacted;
-                } else {
-                    node.children = Some(compact_tree(children, ""));
-                }
-            }
+/// Collapse chains of folders that contain exactly one (loaded) folder and
+/// nothing else, VS Code style: `a/b/c` becomes one node named `c` with
+/// `compact_path = "a / b / "`. `compact_path` is always relative to the
+/// node's displayed parent, so the frontend can rebuild real paths from it.
+fn compact_node(mut node: FileNode) -> FileNode {
+    if node.node_type != "folder" {
+        return node;
+    }
+    let mut prefix: Vec<String> = Vec::new();
+    loop {
+        let single_folder_child = matches!(
+            node.children.as_deref(),
+            Some([child]) if child.node_type == "folder" && !child.unloaded
+        );
+        if !single_folder_child {
+            break;
         }
-        node
-    }).collect()
+        let child = node.children.take().and_then(|c| c.into_iter().next()).unwrap();
+        prefix.push(std::mem::take(&mut node.name));
+        node = child;
+    }
+    if !prefix.is_empty() {
+        node.compact_path = Some(format!("{} / ", prefix.join(" / ")));
+    }
+    node.children = node.children.map(compact_tree);
+    node
+}
+
+fn compact_tree(nodes: Vec<FileNode>) -> Vec<FileNode> {
+    nodes.into_iter().map(compact_node).collect()
 }
 
 // ─── Tauri Commands ────────────────────────────────────────────────
 
+/// Scan a directory. `depth` = how many levels to load now (deeper folders
+/// come back `unloaded` and are fetched on expand). Missing options fall
+/// back to the defaults.
 #[tauri::command]
-fn read_directory(path: String) -> Result<Vec<FileNode>, String> {
+fn read_directory(
+    path: String,
+    depth: Option<usize>,
+    show_hidden: Option<bool>,
+    skip_dirs: Option<Vec<String>>,
+) -> Result<Vec<FileNode>, String> {
     let p = Path::new(&path);
     if !p.exists() {
         return Err(format!("Path does not exist: {}", path));
@@ -170,8 +187,18 @@ fn read_directory(path: String) -> Result<Vec<FileNode>, String> {
     if !p.is_dir() {
         return Err(format!("Path is not a directory: {}", path));
     }
-    let tree = build_tree(p, 0, 8)?;
-    Ok(compact_tree(tree, ""))
+    let opts = ScanOptions {
+        max_depth: depth.unwrap_or(DEFAULT_SCAN_DEPTH).clamp(1, MAX_SCAN_DEPTH),
+        show_hidden: show_hidden.unwrap_or(false),
+        skip_dirs: skip_dirs.unwrap_or_else(default_skip_dirs),
+    };
+    Ok(compact_tree(build_tree(p, 0, &opts)?))
+}
+
+/// The built-in list of skipped directories (shown in Settings as the default).
+#[tauri::command]
+fn default_skip_dirs() -> Vec<String> {
+    SKIP_DIRS.iter().map(|s| s.to_string()).collect()
 }
 
 // ─── Platform integration (VS Code, terminal, file manager) ─────────
@@ -465,6 +492,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             read_directory,
+            default_skip_dirs,
             open_in_vscode,
             open_terminal,
             open_in_explorer,
@@ -530,15 +558,84 @@ mod tests {
         assert!(is_relevant_change(root, Path::new("C:/proj/.git/HEAD")));
     }
 
+    fn opts(max_depth: usize) -> ScanOptions {
+        ScanOptions { max_depth, show_hidden: false, skip_dirs: default_skip_dirs() }
+    }
+
+    /// Creates a unique temp dir with the given relative files, runs `f`, cleans up.
+    fn with_tree(name: &str, files: &[&str], f: impl FnOnce(&Path)) {
+        let root = std::env::temp_dir().join(format!("canopy_{}_{}", name, std::process::id()));
+        for rel in files {
+            let p = root.join(rel);
+            std::fs::create_dir_all(p.parent().unwrap()).unwrap();
+            std::fs::write(&p, "").unwrap();
+        }
+        f(&root);
+        std::fs::remove_dir_all(&root).ok();
+    }
+
     #[test]
-    fn builds_and_compacts_tree() {
-        let tmp = std::env::temp_dir().join(format!("canopy_test_{}", std::process::id()));
-        std::fs::create_dir_all(tmp.join("a").join("b")).unwrap();
-        std::fs::write(tmp.join("a").join("b").join("f.py"), "").unwrap();
-        let tree = compact_tree(build_tree(&tmp, 0, 8).unwrap(), "");
-        std::fs::remove_dir_all(&tmp).ok();
-        assert_eq!(tree[0].name, "b");
-        assert_eq!(tree[0].compact_path.as_deref(), Some("a / "));
-        assert_eq!(tree[0].children.as_ref().unwrap()[0].icon_type.as_deref(), Some("py"));
+    fn compacts_single_folder_chain() {
+        with_tree("chain2", &["a/b/f.py"], |root| {
+            let tree = compact_tree(build_tree(root, 0, &opts(8)).unwrap());
+            assert_eq!(tree[0].name, "b");
+            assert_eq!(tree[0].compact_path.as_deref(), Some("a / "));
+            assert_eq!(tree[0].children.as_ref().unwrap()[0].icon_type.as_deref(), Some("py"));
+        });
+    }
+
+    #[test]
+    fn compacts_long_chain_with_correct_prefix() {
+        // Regression: a/b/c/d used to produce "a / " then a nested "a / c / "
+        with_tree("chain4", &["a/b/c/d/f.txt"], |root| {
+            let tree = compact_tree(build_tree(root, 0, &opts(8)).unwrap());
+            assert_eq!(tree.len(), 1);
+            assert_eq!(tree[0].name, "d");
+            assert_eq!(tree[0].compact_path.as_deref(), Some("a / b / c / "));
+            assert_eq!(tree[0].children.as_ref().unwrap()[0].name, "f.txt");
+        });
+    }
+
+    #[test]
+    fn does_not_compact_folder_with_files() {
+        with_tree("nocompact", &["a/x.txt", "a/b/f.txt"], |root| {
+            let tree = compact_tree(build_tree(root, 0, &opts(8)).unwrap());
+            assert_eq!(tree[0].name, "a");
+            assert!(tree[0].compact_path.is_none());
+        });
+    }
+
+    #[test]
+    fn depth_limit_marks_folders_unloaded() {
+        with_tree("lazy", &["src/deep/more/f.rs", "top.txt"], |root| {
+            let tree = build_tree(root, 0, &opts(1)).unwrap();
+            let src = tree.iter().find(|n| n.name == "src").unwrap();
+            assert!(src.unloaded);
+            assert!(src.children.is_none());
+            assert!(tree.iter().any(|n| n.name == "top.txt"));
+            // An unloaded folder is never compacted into its parent
+            let compacted = compact_tree(build_tree(root, 0, &opts(2)).unwrap());
+            let src = compacted.iter().find(|n| n.name == "src").unwrap();
+            assert!(src.compact_path.is_none());
+            assert!(src.children.as_ref().unwrap()[0].unloaded);
+        });
+    }
+
+    #[test]
+    fn skipped_dirs_are_listed_but_unloaded() {
+        with_tree("skip", &["node_modules/pkg/index.js", "main.js"], |root| {
+            let tree = build_tree(root, 0, &opts(8)).unwrap();
+            let nm = tree.iter().find(|n| n.name == "node_modules").unwrap();
+            assert!(nm.unloaded && nm.children.is_none());
+        });
+    }
+
+    #[test]
+    fn hidden_files_respect_option() {
+        with_tree("hidden", &[".env", "a.txt"], |root| {
+            assert!(!build_tree(root, 0, &opts(8)).unwrap().iter().any(|n| n.name == ".env"));
+            let show = ScanOptions { show_hidden: true, ..opts(8) };
+            assert!(build_tree(root, 0, &show).unwrap().iter().any(|n| n.name == ".env"));
+        });
     }
 }

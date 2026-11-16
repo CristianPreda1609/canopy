@@ -6,15 +6,37 @@
  * When running in browser (no Tauri), functions gracefully degrade.
  */
 
-import type { TreeNode } from '../contexts/AppContext';
+import type { TreeNode } from '../contexts/tree';
 import type { GitStatus } from '../contexts/AppContext';
 export const isTauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
 
+export type ScanOptions = {
+  /** Levels to load now; deeper folders come back `unloaded`. */
+  depth?: number;
+  showHidden?: boolean;
+  /** Folders to list but not scan. Omit for the built-in list. */
+  skipDirs?: string[] | null;
+};
+
 /** Read a directory from the filesystem via Rust */
-export async function readDirectory(path: string): Promise<TreeNode[]> {
+export async function readDirectory(path: string, opts: ScanOptions = {}): Promise<TreeNode[]> {
   if (!isTauri) return [];
   const { invoke } = await import('@tauri-apps/api/core');
-  return invoke<TreeNode[]>('read_directory', { path });
+  return invoke<TreeNode[]>('read_directory', {
+    path,
+    depth: opts.depth,
+    showHidden: opts.showHidden,
+    skipDirs: opts.skipDirs ?? undefined,
+  });
+}
+
+/** The built-in list of folders that are listed but not scanned. */
+export async function defaultSkipDirs(): Promise<string[]> {
+  if (!isTauri) {
+    return ['node_modules', 'target', '.git', '__pycache__', '.venv', 'venv', 'dist', 'build'];
+  }
+  const { invoke } = await import('@tauri-apps/api/core');
+  return invoke<string[]>('default_skip_dirs');
 }
 
 /** Open a folder in VSCode */

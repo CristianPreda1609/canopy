@@ -4,6 +4,7 @@ import { Panels } from "./components/Panels";
 import { StatusBar } from "./components/StatusBar";
 import { CommandPalette } from "./components/CommandPalette";
 import { ContextMenu } from "./components/ContextMenu";
+import { SettingsPanel } from "./components/SettingsPanel";
 import { useAppContext } from "./contexts/AppContext";
 
 function App() {
@@ -37,6 +38,7 @@ function App() {
       </div>
       <CommandPalette />
       <ContextMenu />
+      {state.settingsOpen && <SettingsPanel />}
     </div>
   );
 }

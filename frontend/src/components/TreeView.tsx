@@ -7,7 +7,9 @@ import {
   TbFolder,
   TbFolderOpen,
   TbFileCode,
+  TbLoader2,
 } from 'react-icons/tb';
+import { realSegmentsOf } from '../contexts/tree';
 
 type TreeViewProps = {
   nodes: TreeNode[];
@@ -72,9 +74,7 @@ export function TreeView({ nodes, panelId, level = 0, path = [], realParent = []
         // `realPath` = actual filesystem segments: compacted folders ("models / bert")
         // hide intermediate directories in `compactPath`, which must be included.
         const currentPath = [...path, node.name];
-        const compactSegments = (node.compactPath ?? '')
-          .split('/').map(s => s.trim()).filter(Boolean);
-        const realPath = [...realParent, ...compactSegments, node.name];
+        const realPath = realSegmentsOf(realParent, node);
         const pathStr = realPath.join('/');
         const isFolder = node.type === 'folder';
         const isSelected = state.selectedFile === pathStr;
@@ -88,7 +88,7 @@ export function TreeView({ nodes, panelId, level = 0, path = [], realParent = []
               style={{ paddingLeft: `${10 + level * 14}px` }}
               onClick={() => {
                 if (node.type === 'folder') {
-                  toggleNodeCollapse(panelId, currentPath);
+                  toggleNodeCollapse(panelId, currentPath, realPath);
                 } else {
                   setSelectedFile(pathStr);
                 }
@@ -98,9 +98,11 @@ export function TreeView({ nodes, panelId, level = 0, path = [], realParent = []
             >
               {node.type === 'folder' ? (
                 <>
-                  {node.collapsed
-                    ? <TbChevronRight style={{ flexShrink: 0 }} />
-                    : <TbChevronDown style={{ flexShrink: 0 }} />
+                  {node.loading
+                    ? <TbLoader2 className="spin" style={{ flexShrink: 0 }} />
+                    : node.collapsed
+                      ? <TbChevronRight style={{ flexShrink: 0 }} />
+                      : <TbChevronDown style={{ flexShrink: 0 }} />
                   }
                   {node.collapsed
                     ? <TbFolder style={{ flexShrink: 0, color: 'rgba(240,120,50,0.4)' }} />
@@ -122,6 +124,9 @@ export function TreeView({ nodes, panelId, level = 0, path = [], realParent = []
               )}
             </div>
 
+            {node.type === 'folder' && !node.collapsed && node.children?.length === 0 && (
+              <div className="tree-empty" style={{ paddingLeft: `${10 + (level + 1) * 14 + 19}px` }}>empty</div>
+            )}
             {node.type === 'folder' && !node.collapsed && node.children && (
               <TreeView
                 nodes={node.children}

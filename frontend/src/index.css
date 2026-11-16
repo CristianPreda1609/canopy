@@ -137,7 +137,7 @@ html,body,#root{
   top: 0; left: 0; right: 0; bottom: 0;
   z-index: 100;
 }
-.ctx-menu{
+.ctx-menu{font-family:var(--font-sans);font-size:12px;
   position: absolute;
   background:var(--color-menu-bg);
   border:0.5px solid var(--color-border);
@@ -170,6 +170,9 @@ html,body,#root{
   animation: fadeIn 0.15s ease-out;
 }
 .cmd-palette {
+  font-family: var(--font-sans);
+  font-size: 13px;
+  color: var(--color-text-main);
   background: var(--color-menu-bg);
   border: 1px solid var(--color-border);
   border-radius: 12px;
@@ -308,3 +311,54 @@ html,body,#root{
   grid-auto-rows: auto;
   overflow-x: auto;
 }
+
+/* Lazy loading */
+@keyframes canopy-spin { to { transform: rotate(360deg); } }
+.spin { animation: canopy-spin 0.8s linear infinite; }
+.tree-empty { font-size: 11px; font-style: italic; color: var(--color-text-dim); padding-top: 2px; padding-bottom: 2px; }
+
+/* Settings panel (reuses the command palette overlay) */
+.settings-panel { max-width: 520px; }
+.settings-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 14px 12px 20px; border-bottom: 1px solid var(--color-border);
+  font-size: 14px; font-weight: 500; color: var(--color-text-main);
+}
+.settings-header span { display: flex; align-items: center; gap: 8px; }
+.settings-body { padding: 8px 20px; max-height: 60vh; overflow-y: auto; }
+.settings-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  padding: 12px 0; border-bottom: 0.5px solid var(--color-border);
+}
+.settings-row:last-child { border-bottom: none; }
+.settings-row-col { flex-direction: column; align-items: stretch; gap: 8px; }
+.settings-row-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+.settings-label { font-size: 13px; color: var(--color-text-main); }
+.settings-hint { font-size: 11px; color: var(--color-text-muted); opacity: 0.75; margin-top: 2px; }
+.settings-input {
+  background: rgba(255,255,255,0.04); border: 1px solid var(--color-border); border-radius: 6px;
+  color: var(--color-text-main); font-family: var(--font-sans); font-size: 12px; padding: 6px 8px; outline: none;
+}
+.settings-input:focus { border-color: var(--color-accent); }
+.settings-number { width: 64px; text-align: center; }
+.settings-textarea { font-family: ui-monospace, 'Cascadia Code', Consolas, monospace; resize: vertical; line-height: 1.5; }
+.settings-checkbox { width: 16px; height: 16px; accent-color: var(--color-accent); cursor: pointer; }
+.settings-link {
+  background: none; border: none; color: var(--color-accent-hover); font-size: 11px; cursor: pointer;
+  padding: 0; white-space: nowrap; font-family: var(--font-sans);
+}
+.settings-link:hover { text-decoration: underline; }
+.settings-footer {
+  display: flex; align-items: center; gap: 8px; padding: 12px 20px;
+  border-top: 1px solid var(--color-border); background: rgba(255,255,255,0.02);
+}
+.settings-btn {
+  display: flex; align-items: center; gap: 6px;
+  background: rgba(255,255,255,0.05); border: 1px solid var(--color-border); border-radius: 6px;
+  color: var(--color-text-muted); font-family: var(--font-sans); font-size: 12px; padding: 6px 12px; cursor: pointer;
+}
+.settings-btn:hover { color: var(--color-text-main); background: rgba(255,255,255,0.08); }
+.settings-btn.primary {
+  background: linear-gradient(135deg, var(--color-accent), #c040a0); border-color: transparent; color: #fff;
+}
+.settings-btn.primary:hover { filter: brightness(1.1); }

@@ -20,7 +20,7 @@ type CommandItem = {
 };
 
 export function CommandPalette() {
-  const { state, toggleCommandPalette, addPanel, toggleLayout } = useAppContext();
+  const { state, toggleCommandPalette, addPanel, toggleLayout, toggleSettings } = useAppContext();
   const [search, setSearch] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -60,7 +60,7 @@ export function CommandPalette() {
     { id: 'open-explorer',  label: `Open in ${fileManagerName}`, icon: <TbFolderOpen />, action: () => { const p = getParentPath(); if (p) openInExplorer(p).catch(console.error); } },
     { id: 'reveal-explorer', label: `Reveal in ${fileManagerName}`, icon: <TbExternalLink />, action: wrapAction(revealInExplorer) },
     { id: 'toggle-layout', label: 'Toggle layout', icon: <TbLayoutColumns />, action: toggleLayout },
-    { id: 'settings', label: 'Settings', icon: <TbSettings />, action: () => console.log('Settings') },
+    { id: 'settings', label: 'Settings', icon: <TbSettings />, action: toggleSettings },
   ];
 
   const filteredCommands = commands.filter(cmd => 
@@ -93,8 +93,9 @@ export function CommandPalette() {
       setSelectedIndex(prev => (prev - 1 + filteredCommands.length) % filteredCommands.length);
     } else if (e.key === 'Enter' && filteredCommands[selectedIndex]) {
       e.preventDefault();
-      filteredCommands[selectedIndex].action();
+      // Close first: some commands (Settings) open another overlay
       toggleCommandPalette();
+      filteredCommands[selectedIndex].action();
     } else if (e.key === 'Escape') {
       e.preventDefault();
       toggleCommandPalette();
@@ -124,8 +125,8 @@ export function CommandPalette() {
               key={cmd.id}
               className={`cmd-item ${idx === selectedIndex ? 'selected' : ''}`}
               onClick={() => {
-                cmd.action();
                 toggleCommandPalette();
+                cmd.action();
               }}
               onMouseEnter={() => setSelectedIndex(idx)}
             >

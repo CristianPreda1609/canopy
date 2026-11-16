@@ -1,7 +1,17 @@
 import { createContext, useState, useContext, useEffect, useRef } from "react";
 import type { ReactNode } from "react";
-import { pickFolder, readDirectory, isTauri, getGitInfo, watchDirectory, unwatchDirectory} from "../services/tauri";
-import {listen} from "@tauri-apps/api/event";
+import {
+  pickFolder, readDirectory, isTauri, getGitInfo, watchDirectory, unwatchDirectory, type ScanOptions,
+} from "../services/tauri";
+import { resolveTreePath } from "../services/paths";
+import { listen } from "@tauri-apps/api/event";
+import {
+  addCollapseState, mergeTreeState, detectBadge, updateNodeAt, findNode,
+  type TreeNode, type StaleFolder,
+} from "./tree";
+import { loadSettings, saveSettings, type Settings } from "./settings";
+
+export type { TreeNode } from "./tree";
 
 const STORAGE_KEY = 'canopy_panels';
 const LAYOUT_KEY = 'canopy_layout';
@@ -14,26 +24,19 @@ function loadLayout(): Layout {
 
 function savePanels(panels: PanelItem[]) {
   const paths = panels.map(p => p.path).filter(Boolean);
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(paths));
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(paths)); } catch { /* storage unavailable */ }
 }
 
 function loadSavedPaths(): string[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    return raw ? JSON.parse(raw) : [];
+    const parsed: unknown = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed.filter((p): p is string => typeof p === 'string') : [];
   } catch {
     return [];
   }
 }
 
-export type TreeNode = {
-  name: string;
-  type: 'file' | 'folder';
-  children?: TreeNode[];
-  collapsed?: boolean;
-  compactPath?: string;
-  iconType?: string;
-};
 export type GitFileInfo = {
   path: string;
   status: string;
@@ -43,7 +46,6 @@ export type GitStatus = {
   is_dirty: boolean;
   files: GitFileInfo[];
 };
-
 
 export type PanelItem = { id: string; title: string; badge?: string; path?: string; gitBranch?: string; gitDirty?: boolean; gitFiles?: GitFileInfo[] };
 
@@ -61,9 +63,11 @@ export type AppState = {
   status: string;
   selectedFile: string | null;
   commandPaletteOpen: boolean;
+  settingsOpen: boolean;
   contextMenu: ContextMenuState;
   treeData: Record<string, TreeNode[]>;
   layout: Layout;
+  settings: Settings;
 };
 
 type AppContextType = {
@@ -73,9 +77,12 @@ type AppContextType = {
   addPanel: () => void;
   setSelectedFile: (path: string | null) => void;
   toggleCommandPalette: () => void;
+  toggleSettings: () => void;
+  updateSettings: (s: Settings) => void;
   openContextMenu: (x: number, y: number, targetPath: string, panelPath?: string, isFolder?: boolean) => void;
   closeContextMenu: () => void;
-  toggleNodeCollapse: (panelId: string, path: string[]) => void;
+  /** `namePath` locates the node; `realPath` is its real filesystem path (for lazy loading). */
+  toggleNodeCollapse: (panelId: string, namePath: string[], realPath: string[]) => void;
   toggleLayout: () => void;
 };
 
@@ -127,63 +134,30 @@ const mockPanels: PanelItem[] = [
   { id: "3", title: "web_app", badge: "JS" },
 ];
 
-// ─── Badge detection from tree ──────────────────────────────────────
+// ─── Helpers ────────────────────────────────────────────────────────
 
-function detectBadge(nodes: TreeNode[]): string | undefined {
-  const counts: Record<string, number> = {};
-  const walk = (list: TreeNode[]) => {
-    for (const n of list) {
-      if (n.type === 'file' && n.iconType) {
-        counts[n.iconType] = (counts[n.iconType] || 0) + 1;
-      }
-      if (n.children) walk(n.children);
-    }
+const folderNameOf = (p: string) => p.split(/[/\\]/).filter(Boolean).pop() || p;
+
+const scanOptions = (s: Settings): ScanOptions => ({
+  depth: s.scanDepth, showHidden: s.showHidden, skipDirs: s.skipDirs,
+});
+
+const gitFields = (g: GitStatus | null) => ({
+  gitBranch: g?.branch, gitDirty: g?.is_dirty, gitFiles: g?.files || [],
+});
+
+/** Scan a folder and build its panel + root tree node. */
+async function loadPanel(folderPath: string, id: string, settings: Settings) {
+  const folderName = folderNameOf(folderPath);
+  const rawTree = await readDirectory(folderPath, scanOptions(settings));
+  const rootNode: TreeNode = {
+    name: folderName, type: 'folder', collapsed: false, children: addCollapseState(rawTree, 1),
   };
-  walk(nodes);
-
-  const sorted = Object.entries(counts).sort(([, a], [, b]) => b - a);
-  if (sorted.length === 0) return undefined;
-  
-  const top = sorted[0][0];
-  const badgeMap: Record<string, string> = {
-    py: 'Python', cpp: 'C++', js: 'JS', ts: 'TS', rs: 'Rust',
-    web: 'Web', json: 'Config', config: 'Config', doc: 'Docs'
+  const panel: PanelItem = {
+    id, title: folderName, badge: detectBadge(rawTree), path: folderPath,
+    ...gitFields(await getGitInfo(folderPath)),
   };
-  return badgeMap[top] || top;
-}
-
-function mergeTreeState(oldNodes: TreeNode[], newNodes: TreeNode[]): TreeNode[] {
-  const oldNodeMap = new Map<string, TreeNode>();
-  for (const node of oldNodes) oldNodeMap.set(node.name, node);
-
-  return newNodes.map(newNode => {
-    if (newNode.type === 'folder') {
-      const oldNode = oldNodeMap.get(newNode.name);
-      if (oldNode) {
-        return {
-          ...newNode,
-          collapsed: oldNode.collapsed,
-          children: oldNode.children && newNode.children
-            ? mergeTreeState(oldNode.children, newNode.children)
-            : newNode.children
-        };
-      }
-    }
-    return newNode;
-  });
-}
-
-// ─── Add `collapsed: true` to all folder nodes from Rust ────────────
-
-function addCollapseState(nodes: TreeNode[], depth = 0): TreeNode[] {
-  return nodes.map(node => {
-    if (node.type !== 'folder') return node;
-    return {
-      ...node,
-      collapsed: depth > 0, // root folder expanded, rest collapsed
-      children: node.children ? addCollapseState(node.children, depth + 1) : []
-    };
-  });
+  return { panel, rootNode };
 }
 
 // ─── Context ────────────────────────────────────────────────────────
@@ -197,38 +171,94 @@ export function AppProvider({ children }: { children: ReactNode }) {
     status: "✓ running",
     selectedFile: null,
     commandPaletteOpen: false,
+    settingsOpen: false,
     contextMenu: null,
     treeData: isTauri ? {} : mockTreeData,
     layout: loadLayout(),
+    settings: loadSettings(),
   });
-  
+
+  // Refs so async callbacks (watcher events, lazy loads) see current values
+  const panelsRef = useRef(state.panels);
+  const settingsRef = useRef(state.settings);
+  useEffect(() => { panelsRef.current = state.panels; }, [state.panels]);
+  useEffect(() => { settingsRef.current = state.settings; }, [state.settings]);
+
+  /** Load one folder's contents into the node at `namePath`. */
+  const fetchInto = async (panelId: string, panelPath: string, namePath: string[], realPath: string[]) => {
+    const abs = resolveTreePath(panelPath, realPath.join('/'));
+    let children: TreeNode[];
+    try {
+      children = addCollapseState(await readDirectory(abs, scanOptions(settingsRef.current)), 1);
+    } catch (err) {
+      console.error('Failed to load folder:', abs, err);
+      children = [];
+    }
+    const stale: StaleFolder[] = [];
+    setState(prev => {
+      const tree = prev.treeData[panelId];
+      if (!tree) return prev;
+      return {
+        ...prev,
+        treeData: {
+          ...prev.treeData,
+          [panelId]: updateNodeAt(tree, namePath, n => ({
+            ...n,
+            unloaded: false,
+            loading: false,
+            // On a refresh the folder already has children: keep their expand state
+            children: n.children ? mergeTreeState(n.children, children, namePath, realPath, stale) : children,
+          })),
+        },
+      };
+    });
+    return stale;
+  };
+
+  /** Rescan a panel (after a file change or a settings change), keeping expand state. */
+  const refreshPanel = async (panelId: string) => {
+    const panel = panelsRef.current.find(p => p.id === panelId);
+    if (!panel?.path) return;
+    const rootName = panel.title;
+    try {
+      const rawTree = await readDirectory(panel.path, scanOptions(settingsRef.current));
+      const freshChildren = addCollapseState(rawTree, 1);
+      const gitInfo = await getGitInfo(panel.path);
+      const stale: StaleFolder[] = [];
+
+      setState(prev => {
+        const old = prev.treeData[panelId]?.[0];
+        const children = old?.children
+          ? mergeTreeState(old.children, freshChildren, [rootName], [rootName], stale)
+          : freshChildren;
+        return {
+          ...prev,
+          treeData: { ...prev.treeData, [panelId]: [{ name: rootName, type: 'folder', collapsed: false, children }] },
+          panels: prev.panels.map(p => p.id === panelId ? { ...p, ...gitFields(gitInfo) } : p),
+        };
+      });
+
+      // Expanded folders deeper than the scan depth: re-fetch them (and theirs)
+      const queue = [...stale];
+      while (queue.length) {
+        const { namePath, realPath } = queue.shift()!;
+        queue.push(...await fetchInto(panelId, panel.path, namePath, realPath));
+      }
+    } catch (err) {
+      console.error('Refresh failed:', panel.path, err);
+    }
+  };
+
   // Restore saved panels, in their saved order. Folders that no longer exist are skipped.
   useEffect(() => {
     if (!isTauri) return;
     const restore = async () => {
-      const results = await Promise.all(loadSavedPaths().map(async (folderPath, i) => {
-        const folderName = folderPath.split(/[/\\]/).filter(Boolean).pop() || folderPath;
-        const id = `${Date.now()}-${i}`;
-        try {
-          const rawTree = await readDirectory(folderPath);
-          const rootNode: TreeNode = { name: folderName, type: 'folder', collapsed: false, children: addCollapseState(rawTree) };
-          const gitInfo = await getGitInfo(folderPath);
-          const panel: PanelItem = {
-            id,
-            title: folderName,
-            badge: detectBadge(rawTree),
-            path: folderPath,
-            gitBranch: gitInfo?.branch,
-            gitDirty: gitInfo?.is_dirty,
-            gitFiles: gitInfo?.files || [],
-          };
-          return { panel, rootNode };
-        } catch (err) {
+      const results = await Promise.all(loadSavedPaths().map((folderPath, i) =>
+        loadPanel(folderPath, `${Date.now()}-${i}`, settingsRef.current).catch(err => {
           console.error('Failed to restore panel:', folderPath, err);
           return null;
-        }
-      }));
-
+        })
+      ));
       const restored = results.filter((r): r is NonNullable<typeof r> => r !== null);
       setState(prev => ({
         ...prev,
@@ -241,63 +271,27 @@ export function AppProvider({ children }: { children: ReactNode }) {
     restore();
   }, []);
 
-  // 2. PENTRU WATCHER (Ca să știm path-ul în timp real)
-  const panelsRef = useRef(state.panels);
-  useEffect(() => { panelsRef.current = state.panels; }, [state.panels]);
-
-  // 3. FILE WATCHER LISTENER (Ascultă evenimentele de la Rust)
+  // File watcher: Rust emits `file_changed` with the panel id; debounce, then rescan
+  const refreshRef = useRef(refreshPanel);
+  useEffect(() => { refreshRef.current = refreshPanel; });
   useEffect(() => {
     if (!isTauri) return;
     const debounceTimers: Record<string, number> = {};
+    let unlisten: (() => void) | undefined;
+    let cancelled = false;
 
-    const setupListener = async () => {
-      const unlisten = await listen<string>('file_changed', (event) => {
-        const panelId = event.payload;
-        if (debounceTimers[panelId]) clearTimeout(debounceTimers[panelId]);
-
-        debounceTimers[panelId] = setTimeout(async () => {
-          const panel = panelsRef.current.find(p => p.id === panelId);
-          if (!panel || !panel.path) return;
-
-          try {
-            const rawTree = await readDirectory(panel.path);
-            const newChildren = addCollapseState(rawTree);
-            const gitInfo = await getGitInfo(panel.path);
-
-            setState(prev => {
-              const oldTree = prev.treeData[panelId];
-              let finalRootNode: TreeNode = { 
-                name: panel.title, type: 'folder', collapsed: false, children: newChildren 
-              };
-
-              if (oldTree && oldTree.length > 0 && oldTree[0].children) {
-                finalRootNode = {
-                  ...finalRootNode,
-                  children: mergeTreeState(oldTree[0].children, newChildren)
-                };
-              }
-
-              return {
-                ...prev,
-                treeData: { ...prev.treeData, [panelId]: [finalRootNode] },
-                panels: prev.panels.map(p => p.id === panelId ? {
-                  ...p, gitBranch: gitInfo?.branch, gitDirty: gitInfo?.is_dirty, gitFiles: gitInfo?.files || []
-                } : p)
-              };
-            });
-          } catch (err) {
-            console.error('Watcher refresh failed:', err);
-          }
-        }, 500);
-      });
-      return unlisten;
-    };
-
-    let unlistenFn: (() => void) | undefined;
-    setupListener().then(fn => { unlistenFn = fn; });
+    listen<string>('file_changed', (event) => {
+      const panelId = event.payload;
+      clearTimeout(debounceTimers[panelId]);
+      debounceTimers[panelId] = setTimeout(() => refreshRef.current(panelId), 500);
+    }).then(fn => {
+      // If we unmounted before the listener was ready, drop it right away
+      if (cancelled) fn(); else unlisten = fn;
+    });
 
     return () => {
-      if (unlistenFn) unlistenFn();
+      cancelled = true;
+      unlisten?.();
       Object.values(debounceTimers).forEach(clearTimeout);
     };
   }, []);
@@ -305,7 +299,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const setActivePanelId = (id: string) =>
     setState(prev => ({ ...prev, activePanelId: id }));
 
-  const removePanel = (id: string) =>{
+  const removePanel = (id: string) => {
     if (isTauri) unwatchDirectory(id).catch(console.error);
     setState(prev => {
       const updated = prev.panels.filter(p => p.id !== id);
@@ -321,56 +315,24 @@ export function AppProvider({ children }: { children: ReactNode }) {
     });
   };
 
-
   const addPanel = async () => {
-    if (isTauri) {
-      const folderPath = await pickFolder();
-      if (!folderPath) return;
-
-      const folderName = folderPath.split(/[/\\]/).filter(Boolean).pop() || folderPath;
-      const id = Date.now().toString();
-
-      try {
-        const rawTree = await readDirectory(folderPath);
-        const tree = addCollapseState(rawTree);
-        const rootNode: TreeNode = {
-          name: folderName,
-          type: 'folder',
-          collapsed: false,
-          children: tree,
-        };
-        const badge = detectBadge(rawTree);
-        const gitInfo = await getGitInfo(folderPath);
-        
-        const newPanel = { 
-          id, 
-          title: folderName, 
-          badge, 
-          path: folderPath,
-          gitBranch: gitInfo?.branch,
-          gitDirty: gitInfo?.is_dirty,
-          gitFiles: gitInfo?.files || [],
-        };
-
-        setState(prev => {
-          const updated = [...prev.panels, newPanel];
-          savePanels(updated);
-          return {
-            ...prev,
-            panels: updated,
-            treeData: { ...prev.treeData, [id]: [rootNode] },
-            activePanelId: id,
-          };
-        });
-        watchDirectory(id, folderPath).catch(console.error);
-      } catch (err) {
-        console.error('Failed to read directory:', err);
-      }
-    } else {
-      setState(prev => ({
-        ...prev,
-        panels: [...prev.panels, { id: Date.now().toString(), title: "new_panel" }],
-      }));
+    if (!isTauri) {
+      setState(prev => ({ ...prev, panels: [...prev.panels, { id: Date.now().toString(), title: "new_panel" }] }));
+      return;
+    }
+    const folderPath = await pickFolder();
+    if (!folderPath) return;
+    const id = Date.now().toString();
+    try {
+      const { panel, rootNode } = await loadPanel(folderPath, id, settingsRef.current);
+      setState(prev => {
+        const updated = [...prev.panels, panel];
+        savePanels(updated);
+        return { ...prev, panels: updated, treeData: { ...prev.treeData, [id]: [rootNode] }, activePanelId: id };
+      });
+      watchDirectory(id, folderPath).catch(console.error);
+    } catch (err) {
+      console.error('Failed to read directory:', err);
     }
   };
 
@@ -385,7 +347,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setState(prev => ({ ...prev, selectedFile: path }));
 
   const toggleCommandPalette = () =>
-    setState(prev => ({ ...prev, commandPaletteOpen: !prev.commandPaletteOpen }));
+    setState(prev => ({ ...prev, commandPaletteOpen: !prev.commandPaletteOpen, settingsOpen: false }));
+
+  const toggleSettings = () =>
+    setState(prev => ({ ...prev, settingsOpen: !prev.settingsOpen, commandPaletteOpen: false }));
+
+  /** Save settings and rescan every panel with them. */
+  const updateSettings = (next: Settings) => {
+    saveSettings(next);
+    settingsRef.current = next;
+    setState(prev => ({ ...prev, settings: next }));
+    panelsRef.current.forEach(p => refreshPanel(p.id));
+  };
 
   const openContextMenu = (x: number, y: number, targetPath: string, panelPath?: string, isFolder?: boolean) =>
     setState(prev => ({ ...prev, contextMenu: { x, y, targetPath, panelPath, isFolder } }));
@@ -393,39 +366,42 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const closeContextMenu = () =>
     setState(prev => ({ ...prev, contextMenu: null }));
 
-  const toggleNodeCollapse = (panelId: string, nodePath: string[]) => {
-    setState(prev => {
-      const newTreeData = { ...prev.treeData };
-      if (!newTreeData[panelId]) return prev;
+  /**
+   * Expand/collapse a folder. Expanding an `unloaded` folder fetches its
+   * contents first (lazy loading).
+   */
+  const toggleNodeCollapse = (panelId: string, namePath: string[], realPath: string[]) => {
+    const tree = state.treeData[panelId];
+    const node = tree && findNode(tree, namePath);
+    if (!node || node.type !== 'folder' || node.loading) return;
 
-      const treeClone = JSON.parse(JSON.stringify(newTreeData[panelId])) as TreeNode[];
+    const panelPath = state.panels.find(p => p.id === panelId)?.path;
+    if (node.unloaded && node.collapsed && panelPath) {
+      setState(prev => ({
+        ...prev,
+        treeData: {
+          ...prev.treeData,
+          [panelId]: updateNodeAt(prev.treeData[panelId], namePath, n => ({ ...n, collapsed: false, loading: true })),
+        },
+      }));
+      fetchInto(panelId, panelPath, namePath, realPath);
+      return;
+    }
 
-      let currentNodes = treeClone;
-      let targetNode: TreeNode | undefined;
-
-      for (const name of nodePath) {
-        targetNode = currentNodes.find(n => n.name === name);
-        if (targetNode && targetNode.children) {
-          currentNodes = targetNode.children;
-        } else {
-          break;
-        }
-      }
-
-      if (targetNode && targetNode.type === 'folder') {
-        targetNode.collapsed = !targetNode.collapsed;
-      }
-
-      newTreeData[panelId] = treeClone;
-      return { ...prev, treeData: newTreeData };
-    });
+    setState(prev => ({
+      ...prev,
+      treeData: {
+        ...prev.treeData,
+        [panelId]: updateNodeAt(prev.treeData[panelId], namePath, n => ({ ...n, collapsed: !n.collapsed })),
+      },
+    }));
   };
 
   return (
     <AppContext.Provider value={{
       state, setActivePanelId, removePanel, addPanel,
-      setSelectedFile, toggleCommandPalette, openContextMenu, closeContextMenu,
-      toggleNodeCollapse, toggleLayout
+      setSelectedFile, toggleCommandPalette, toggleSettings, updateSettings,
+      openContextMenu, closeContextMenu, toggleNodeCollapse, toggleLayout,
     }}>
       {children}
     </AppContext.Provider>
