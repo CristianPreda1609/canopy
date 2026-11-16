@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-Canopy: a Windows desktop app (Tauri 2) that shows multiple project folders side by side as live file trees, with git status and quick actions (VS Code, terminal, Explorer).
+Canopy: a cross-platform desktop app (Tauri 2; Windows, macOS, Linux) that shows multiple project folders side by side as live file trees, with git status and quick actions (VS Code, terminal, file manager).
 
 ## Layout
 
@@ -22,11 +22,13 @@ cd src-tauri; cargo tauri dev     # full app (starts Vite on :5173 automatically
 cd frontend; npm run dev          # UI only, native calls are mocked
 cd frontend; npm run build        # tsc -b + vite build (type-check gate)
 cd frontend; npm run lint
+cd frontend; npm test            # node:test unit tests (src/**/*.test.ts)
+cd src-tauri; cargo test --lib   # Rust unit tests (bottom of lib.rs)
 cd src-tauri; cargo check         # fast Rust check; cargo clippy for lints
 cd src-tauri; cargo tauri build   # release installers -> target/release/bundle/
 ```
 
-Before finishing a change, run `npm run build` + `npm run lint` (frontend) and/or `cargo check` (backend) for whatever you touched.
+Before finishing a change, run what CI runs for whatever you touched: `npm run lint && npm test && npm run build` (frontend) and `cargo clippy --all-targets -- -D warnings && cargo test` (backend). CI (`.github/workflows/ci.yml`) runs these on Windows, macOS and Linux.
 
 ## Rules
 
@@ -38,7 +40,8 @@ Before finishing a change, run `npm run build` + `npm run lint` (frontend) and/o
 - Spawn external programs with `.spawn()`, never `.output()`, unless the output is needed (as in `git status`). The UI must not block.
 - Keep Rust types and TS types in sync: `FileNode` ↔ `TreeNode`, `GitStatus` ↔ `GitStatus` (note the serde renames `type`, `iconType`, `compactPath`).
 - Styling is vanilla CSS with variables in `index.css`. Don't add a CSS framework. Icons come from `react-icons/tb` (Tabler).
-- The app is Windows-only for now (`explorer`, `wt`, `cmd`). Gate any cross-platform work behind `cfg!(target_os = ...)`.
+- **Cross-platform:** OS-specific process spawning lives in the "Platform integration" section of `lib.rs`, uses `cfg!(target_os = ...)` with a fallback list via `spawn_first`. Never hardcode `\` or `/` in frontend paths; use `services/paths.ts` (`resolveTreePath`, `parentDir`, `fileManagerName`).
+- `macOSPrivateApi` is on (Cargo feature `macos-private-api`) for the transparent window. Keep both in sync.
 
 ## Never commit
 
@@ -47,10 +50,12 @@ Before finishing a change, run `npm run build` + `npm run lint` (frontend) and/o
 
 ## Known issues / TODO
 
-- `build_tree` fails the whole tree if any subdirectory can't be read. It should skip the failing folder instead.
-- The watcher emits `file_changed` on every event, including in `.git` and `node_modules`. It needs debouncing and path filtering.
-- The git porcelain parser maps two-letter codes (`MM`, `AM`, …) to `unknown` and doesn't split rename paths (`old -> new`).
-- `AppContext.tsx` still contains demo panels (`ml_thesis`, `embedded`, `web_app`) and a `new_panel` placeholder.
-- The command palette's "Toggle layout" and "Settings" are placeholders.
-- The bundle identifier is still `com.tauri.dev`, and the Cargo metadata is template defaults.
-- There are no tests and no CI yet.
+- Icons: the source is `src-tauri/app-icon.png`. Regenerate with `cargo tauri icon app-icon.png`, then copy into `frontend/public/favicon.png` and `frontend/src/assets/canopy-logo.png`.
+- No Settings panel yet (the title bar button is a placeholder).
+- macOS release builds are unsigned.
+- The demo panels in `AppContext.tsx` are intentional: they only show in browser-only mode (`!isTauri`).
+
+## Path conventions (frontend)
+
+- Tree paths are `"<rootName>/<rel/path>"` with `/` separators. Compacted folders hide intermediate dirs in `compactPath`, and TreeView adds them back into the real path (`realParent`). Never rebuild filesystem paths from `node.name` alone.
+- Git file paths are relative to the panel root. Match them exactly against the tree path minus the root segment.
