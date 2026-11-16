@@ -121,51 +121,54 @@ type AppContextType = {
 
 // ─── Mock data (used when running in browser without Tauri) ─────────
 
+const f = (name: string, iconType?: string): TreeNode => ({ name, type: 'file', iconType });
+const dir = (name: string, children: TreeNode[], opts: Partial<TreeNode> = {}): TreeNode =>
+  ({ name, type: 'folder', collapsed: true, children, ...opts });
+
+/** Made-up demo projects for browser mode (UI work, screenshots). Never real data. */
 const mockTreeData: Record<string, TreeNode[]> = {
-  "1": [
-    {
-      name: "ml_thesis", type: "folder", collapsed: false, children: [
-        {
-          name: "bert_finetune", type: "folder", compactPath: "models / ", collapsed: false, children: [
-            { name: "bert_finetune.py", type: "file", iconType: "py" },
-            { name: "train.py", type: "file", iconType: "py" },
-            { name: "eval.py", type: "file", iconType: "py" }
-          ]
-        },
-        { name: "notebooks", type: "folder", collapsed: true, children: [] },
-        { name: "data", type: "folder", collapsed: true, children: [] },
-        { name: "requirements.txt", type: "file" }
-      ]
-    }
-  ],
-  "2": [
-    {
-      name: "platformio_proj", type: "folder", collapsed: false, children: [
-        { name: "src", type: "folder", collapsed: true, children: [] },
-        { name: "lib", type: "folder", collapsed: true, children: [] },
-        { name: "include", type: "folder", collapsed: true, children: [] },
-        { name: "platformio.ini", type: "file" },
-        { name: "CMakeLists.txt", type: "file" }
-      ]
-    }
-  ],
-  "3": [
-    {
-      name: "web_app", type: "folder", collapsed: false, children: [
-        { name: "components", type: "folder", compactPath: "src / ", collapsed: true, children: [] },
-        { name: "public", type: "folder", collapsed: true, children: [] },
-        { name: "package.json", type: "file" },
-        { name: "vite.config.ts", type: "file" }
-      ]
-    }
-  ]
+  "1": [dir("ml-thesis", [
+    dir("bert_finetune", [f("bert_finetune.py", "py"), f("train.py", "py"), f("eval.py", "py")],
+      { compactPath: "models / ", collapsed: false }),
+    dir("notebooks", [f("explore.ipynb"), f("results.ipynb")], { collapsed: false }),
+    dir("configs", [f("default.yaml", "config"), f("sweep.yaml", "config")]),
+    dir("data", [], { unloaded: true, children: undefined }),
+    f("README.md", "doc"), f("requirements.txt", "doc"),
+  ], { collapsed: false })],
+  "2": [dir("firmware", [
+    dir("src", [f("main.cpp", "cpp"), f("sensors.cpp", "cpp"), f("sensors.h", "cpp"), f("radio.cpp", "cpp")], { collapsed: false }),
+    dir("include", [f("config.h", "cpp"), f("pins.h", "cpp")]),
+    dir("lib", [], { unloaded: true, children: undefined }),
+    f("platformio.ini", "config"), f("CMakeLists.txt", "doc"),
+  ], { collapsed: false })],
+  "3": [dir("web-dashboard", [
+    dir("components", [f("App.tsx", "ts"), f("Chart.tsx", "ts"), f("Sidebar.tsx", "ts"), f("StatCard.tsx", "ts")],
+      { compactPath: "src / ", collapsed: false }),
+    dir("node_modules", [], { unloaded: true, children: undefined }),
+    dir("public", [f("favicon.svg"), f("logo.png")]),
+    f("index.html", "web"), f("package.json", "json"), f("tsconfig.json", "json"), f("vite.config.ts", "ts"),
+  ], { collapsed: false })],
 };
 
 const mockPanels: PanelItem[] = [
   // Fake paths so path-based UI (Go to file, context menu) works in browser mode
-  { id: "1", title: "ml_thesis", badge: "Python", path: "/demo/ml_thesis" },
-  { id: "2", title: "embedded", badge: "C++", path: "/demo/embedded" },
-  { id: "3", title: "web_app", badge: "JS", path: "/demo/web_app" },
+  {
+    id: "1", title: "ml-thesis", badge: "Python", path: "/demo/ml-thesis", gitBranch: "main", gitDirty: true,
+    gitFiles: [
+      { path: "models/bert_finetune/train.py", status: "modified" },
+      { path: "models/bert_finetune/eval.py", status: "staged" },
+      { path: "notebooks/results.ipynb", status: "untracked" },
+      { path: "requirements.txt", status: "modified" },
+    ],
+  },
+  {
+    id: "2", title: "firmware", badge: "C++", path: "/demo/firmware", gitBranch: "feature/lora", gitDirty: true,
+    gitFiles: [
+      { path: "src/radio.cpp", status: "conflict" },
+      { path: "src/sensors.cpp", status: "staged" },
+    ],
+  },
+  { id: "3", title: "web-dashboard", badge: "TS", path: "/demo/web-dashboard", gitBranch: "main", gitDirty: false, gitFiles: [] },
 ];
 
 // ─── Helpers ────────────────────────────────────────────────────────

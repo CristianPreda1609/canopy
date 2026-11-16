@@ -12,11 +12,18 @@
 
 Canopy is built with **[Tauri 2](https://tauri.app/)**, so it uses a native Rust backend and the system WebView2. It doesn't bundle a whole browser.
 
+<p align="center">
+  <img src="docs/canopy-tour.gif" alt="A tour of Canopy: keyboard navigation, Go to file, the command palette, settings, the context menu and layouts" width="900" />
+</p>
+
+> 🧪 Want Hyprland-style tiling and workspaces? Try the experimental **Canopy Tiling** build from the [`experimental/tiling`](https://github.com/CristianPreda1609/canopy/tree/experimental/tiling) branch. It installs next to Canopy.
+
 ---
 
 ## Table of Contents
 
 - [Features](#features)
+- [Screenshots](#screenshots)
 - [Tech Stack](#tech-stack)
 - [Project Structure](#project-structure)
 - [Getting Started](#getting-started)
@@ -52,10 +59,22 @@ Canopy is built with **[Tauri 2](https://tauri.app/)**, so it uses a native Rust
 - 🖥️ **Cross-platform**: Windows, macOS and Linux, each using its native terminal and file manager.
 - 🧱 **Two layouts**: a wrapping grid, or a single scrollable row of panels (remembered between launches).
 - 🎛️ **Command palette** (`Ctrl+Shift+P`) with fuzzy filtering and keyboard navigation.
-- ⬆️ **Auto-updates**: Canopy checks GitHub Releases on startup and updates itself in one click. Updates are cryptographically signed.
 - 💾 **Persistent workspace**: the panels you open are remembered between launches.
 - 🪟 **Frameless, transparent window** with a custom title bar and a glassmorphism UI.
 - 🧪 **Browser fallback**: the frontend also runs in a regular browser (`npm run dev`), with mocked native calls for UI work.
+
+## Screenshots
+
+All screenshots use made-up demo projects.
+
+| | |
+|---|---|
+| ![Three projects side by side with git status colors](docs/screenshots/overview.png) | ![Command palette with shortcut hints](docs/screenshots/command-palette.png) |
+| **Overview**: live trees, git branch and status colors, merged single-folder chains | **Command palette** (`Ctrl+Shift+P`) with your current shortcuts |
+| ![Fuzzy Go to file across all panels](docs/screenshots/go-to-file.png) | ![Right-click context menu](docs/screenshots/context-menu.png) |
+| **Go to file** (`Ctrl+P`): fuzzy search across every open project | **Context menu**: VS Code, terminal, file manager, copy path |
+| ![Shortcuts guide with rebindable keys](docs/screenshots/shortcuts-guide.png) | ![Git color settings](docs/screenshots/git-colors.png) |
+| **Shortcuts guide** (`F1`): every shortcut, app shortcuts rebindable | **Git colors**: pick your own color per status |
 
 ---
 
@@ -229,9 +248,11 @@ cd src-tauri; cargo clippy --all-targets -- -D warnings
 | `npm test`        | Run unit tests                      |
 | `npm run preview` | Preview the production build        |
 
-### Auto-updates
+### Auto-updates (not enabled yet)
 
-Canopy uses Tauri's official [updater plugin](https://v2.tauri.app/plugin/updater/):
+> ⚠️ The updater is built in, but **signed releases aren't set up yet**, so the app currently never offers an update. For now, download new versions from [Releases](https://github.com/CristianPreda1609/canopy/releases) and run the installer. It upgrades in place and keeps your settings.
+
+Once it's enabled, Canopy will use Tauri's official [updater plugin](https://v2.tauri.app/plugin/updater/):
 
 1. About 5 seconds after startup, the app fetches `releases/latest/download/latest.json` from this repo. You can also run **Check for updates** from the command palette.
 2. If a newer version exists, an **"update to vX.Y.Z"** pill appears in the status bar. Clicking it downloads the update, checks its signature against the public key in `tauri.conf.json`, installs it and restarts.
@@ -450,7 +471,7 @@ A strict **Content Security Policy** is also set in `tauri.conf.json`. It allows
 - [x] Settings panel (scan depth, hidden files, skipped folders)
 - [x] Lazy loading of deep and skipped folders
 - [x] Keyboard shortcuts, tree navigation and Go to file (`Ctrl+P`)
-- [x] Signed auto-updates via GitHub Releases
+- [ ] Auto-updates: the updater is built in, but signing and published releases aren't set up yet
 - [ ] Sign and notarize the macOS builds.
 
 ---

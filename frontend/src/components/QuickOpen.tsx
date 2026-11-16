@@ -122,7 +122,7 @@ export function QuickOpen() {
                 <TbFileCode />
                 <span className="qo-name"><Highlighted text={name} positions={match.positions} offset={nameStart} /></span>
                 <span className="qo-dir">
-                  {multiPanel && <span className="qo-panel">{item.panelTitle} · </span>}
+                  {multiPanel && <span className="qo-panel">{item.panelTitle}{dir ? ' · ' : ''}</span>}
                   <Highlighted text={dir} positions={match.positions.filter(p => p < nameStart)} />
                 </span>
               </div>
