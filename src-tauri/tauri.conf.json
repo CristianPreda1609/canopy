@@ -6,8 +6,15 @@
   "build": {
     "frontendDist": "../frontend/dist",
     "devUrl": "http://localhost:5173",
-    "beforeDevCommand": "cd frontend && npm run dev",
-    "beforeBuildCommand": "cd frontend && npm run build"
+    "beforeDevCommand": {
+      "script": "npm run dev",
+      "cwd": "../frontend",
+      "wait": false
+    },
+    "beforeBuildCommand": {
+      "script": "npm run build",
+      "cwd": "../frontend"
+    }
   },
   "app": {
     "macOSPrivateApi": true,
