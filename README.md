@@ -16,7 +16,11 @@ Canopy is built with **[Tauri 2](https://tauri.app/)**, so it uses a native Rust
   <img src="docs/canopy-tour.gif" alt="A tour of Canopy: keyboard navigation, Go to file, the command palette, settings, the context menu and layouts" width="900" />
 </p>
 
-> 🧪 Want Hyprland-style tiling and workspaces? Try the experimental **Canopy Tiling** build from the [`experimental/tiling`](https://github.com/CristianPreda1609/canopy/tree/experimental/tiling) branch. It installs next to Canopy.
+> 🧪 **You're on the `experimental/tiling` branch: Canopy Tiling.** Hyprland-style tiling and workspaces. It installs as a separate app ("Canopy Tiling") next to regular Canopy.
+
+<p align="center">
+  <img src="docs/canopy-tiling-tour.gif" alt="Tiling tour: Alt+H/J/K/L focus, swapping, resizing, fullscreen, flipping splits, workspaces and dragging a divider" width="900" />
+</p>
 
 ---
 
@@ -66,6 +70,15 @@ Canopy is built with **[Tauri 2](https://tauri.app/)**, so it uses a native Rust
 ## Screenshots
 
 All screenshots use made-up demo projects.
+
+**Tiling** *(this branch)*
+
+| | |
+|---|---|
+| ![Dwindle tiling with the focused panel glowing](docs/screenshots/tiling-overview.png) | ![Two workspaces with a resized split](docs/screenshots/tiling-workspaces.png) |
+| **Dwindle tiling**: new panels split the focused one; `Alt+H/J/K/L` moves focus | **Workspaces**: pills in the title bar, `Alt+1…9` to switch, splits resized with `Alt+Ctrl+arrows` or by dragging |
+
+**Everything else** (same as `main`)
 
 | | |
 |---|---|

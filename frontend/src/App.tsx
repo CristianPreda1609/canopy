@@ -7,10 +7,18 @@ import { SettingsPanel } from "./components/SettingsPanel";
 import { useAppContext } from "./contexts/AppContext";
 import { useShortcuts } from "./hooks/useShortcuts";
 import { QuickOpen } from "./components/QuickOpen";
+import { leaves } from "./tiling/layout";
+import { activeLayout, occupiedWorkspaces } from "./tiling/workspaces";
 
 function App() {
   const { state } = useAppContext();
   useShortcuts();
+
+  // Panels on the visible workspace, plus how many workspaces are in use
+  const onWorkspace = leaves(activeLayout(state.workspaces)).length;
+  const used = occupiedWorkspaces(state.workspaces).length;
+  const panelSummary = `${onWorkspace} panel${onWorkspace === 1 ? '' : 's'}`
+    + (used > 1 ? ` · workspace ${state.workspaces.active} of ${used}` : '');
 
   return (
     <div className="app-wrap">
@@ -21,7 +29,7 @@ function App() {
           <TitleBar />
           <Panels />
           <StatusBar 
-            infopans={`${state.panels.length} panels`} 
+            infopans={panelSummary} 
             folder_files={state.selection?.path || "Nothing selected"} 
             state={state.status} 
           />
