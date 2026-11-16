@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import { useAppContext } from '../contexts/AppContext';
 import { openInVSCode, openTerminal, openInExplorer, revealInExplorer, copyToClipboard } from '../services/tauri';
 import { resolveTreePath, parentDir, fileManagerName } from '../services/paths';
+import { formatCombo } from '../keymap';
 import {
   TbBrandVscode,
   TbTerminal,
@@ -20,8 +21,22 @@ export function ContextMenu() {
         closeContextMenu();
       }
     };
+    // Keys shown as hints in the menu: Esc, Enter (open project), Ctrl/Cmd+C (copy path)
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') closeContextMenu();
+      const menu = state.contextMenu;
+      if (!menu) return;
+      const full = menu.panelPath ? resolveTreePath(menu.panelPath, menu.targetPath) : menu.targetPath;
+      if (e.key === 'Escape') {
+        closeContextMenu();
+      } else if (e.key === 'Enter') {
+        e.preventDefault();
+        openInVSCode(menu.panelPath || full).catch(console.error);
+        closeContextMenu();
+      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'c') {
+        e.preventDefault();
+        copyToClipboard(full).catch(console.error);
+        closeContextMenu();
+      }
     };
 
     if (state.contextMenu) {
@@ -55,13 +70,13 @@ export function ContextMenu() {
       <div 
         ref={menuRef} 
         className="ctx-menu"
-        style={{ left: Math.min(x, window.innerWidth - 200), top: Math.min(y, window.innerHeight - 150) }}
+        style={{ left: Math.min(x, window.innerWidth - 250), top: Math.min(y, window.innerHeight - 190) }}
       >
         <div className="ctx-item accent" onClick={() => { 
         openInVSCode(panelPath || fullPath).catch(console.error); 
         closeContextMenu(); 
         }}>
-          <TbBrandVscode /> open in VSCode <span className="ctx-sh">↵</span>
+          <TbBrandVscode /> open project in VS Code <span className="ctx-sh">↵</span>
         </div>
         <div className="ctx-item" onClick={() => { 
           openTerminal(folderPath).catch(console.error);
@@ -79,7 +94,7 @@ export function ContextMenu() {
         <div className="ctx-sep" />
         
         <div className="ctx-item" onClick={wrapAction(copyToClipboard)}>
-          <TbCopy /> copy path <span className="ctx-sh">ctrl+c</span>
+          <TbCopy /> copy path <span className="ctx-sh">{formatCombo('Mod+C').toLowerCase()}</span>
         </div>
         <div className="ctx-item" onClick={() => { 
           revealInExplorer(fullPath).catch(console.error);

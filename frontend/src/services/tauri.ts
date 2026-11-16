@@ -111,9 +111,13 @@ export type FileList = { files: string[]; truncated: boolean };
 export async function listFiles(path: string, opts: Omit<ScanOptions, 'depth'> = {}): Promise<FileList> {
   if (!isTauri) {
     const demo: Record<string, string[]> = {
-      ml_thesis: ['models/bert_finetune/bert_finetune.py', 'models/bert_finetune/train.py', 'models/bert_finetune/eval.py', 'notebooks/explore.ipynb', 'requirements.txt'],
-      embedded: ['platformio_proj/src/main.cpp', 'platformio_proj/include/config.h', 'platformio_proj/platformio.ini'],
-      web_app: ['web_app/src/components/App.tsx', 'web_app/src/components/AppContext.tsx', 'web_app/package.json', 'web_app/vite.config.ts'],
+      'ml-thesis': ['models/bert_finetune/bert_finetune.py', 'models/bert_finetune/train.py', 'models/bert_finetune/eval.py',
+        'notebooks/explore.ipynb', 'notebooks/results.ipynb', 'configs/default.yaml', 'configs/sweep.yaml',
+        'data/raw/train.csv', 'data/raw/test.csv', 'README.md', 'requirements.txt'],
+      firmware: ['src/main.cpp', 'src/sensors.cpp', 'src/sensors.h', 'src/radio.cpp', 'include/config.h', 'include/pins.h',
+        'lib/lora/LoRa.cpp', 'platformio.ini', 'CMakeLists.txt'],
+      'web-dashboard': ['src/components/App.tsx', 'src/components/Chart.tsx', 'src/components/Sidebar.tsx',
+        'src/components/StatCard.tsx', 'src/main.tsx', 'public/favicon.svg', 'index.html', 'package.json', 'tsconfig.json', 'vite.config.ts'],
     };
     return { files: demo[path.split('/').pop() ?? ''] ?? [], truncated: false };
   }
