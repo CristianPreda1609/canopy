@@ -1,7 +1,7 @@
 use serde::Serialize;
 use std::{path::Path, collections::HashMap, sync::Mutex, time::{Duration, Instant}};
 use notify::{Watcher, RecursiveMode, RecommendedWatcher, Config};
-use tauri::{ Emitter};
+use tauri::{Emitter, Manager};
 
 
 struct WatcherState{
@@ -553,6 +553,11 @@ pub fn run() {
             {
                 app.handle().plugin(tauri_plugin_updater::Builder::new().build())?;
                 app.handle().plugin(tauri_plugin_process::init())?;
+            }
+            // Put keyboard focus inside the web content at startup, so
+            // shortcuts work immediately without clicking the window first
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.set_focus();
             }
             if cfg!(debug_assertions) {
                 app.handle().plugin(
