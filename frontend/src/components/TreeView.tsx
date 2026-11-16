@@ -10,6 +10,7 @@ import {
   TbLoader2,
 } from 'react-icons/tb';
 import { realSegmentsOf } from '../contexts/tree';
+import { DEFAULT_GIT_COLORS, gitColor, type GitColorKey } from '../contexts/settings';
 
 type TreeViewProps = {
   nodes: TreeNode[];
@@ -56,16 +57,9 @@ export function TreeView({ nodes, panelId, level = 0, path = [], realParent = []
     }
   };
 
-  const getGitColor = (status: string | null): string | undefined => {
-    switch (status) {
-      case 'modified': return '#f09060'; // Orange
-      case 'staged': return '#7dd49a'; // Green
-      case 'untracked': return 'rgba(180, 140, 255, 0.5)'; // Gray/Purple
-      case 'conflict': return '#ff6b6b'; // Red
-      case 'deleted': return '#ff6b6b'; // Red
-      default: return undefined;
-    }
-  };
+  // Colors are configurable in Settings → Git colors
+  const getGitColor = (status: string | null): string | undefined =>
+    status && status in DEFAULT_GIT_COLORS ? gitColor(state.settings, status as GitColorKey) : undefined;
 
   return (
     <div className="tree-children">

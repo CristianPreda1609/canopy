@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useAppContext } from '../contexts/AppContext';
 import { targetPaths, fileManagerName } from '../services/paths';
 import { openInVSCode, openTerminal, openInExplorer, revealInExplorer, copyToClipboard } from '../services/tauri';
-import { KEYMAP, formatCombo, type ShortcutId } from '../keymap';
+import { comboFor, formatCombo, type ShortcutId } from '../keymap';
 import { fuzzyFilter } from '../fuzzy';
 import {
   TbFolderPlus,
@@ -15,6 +15,8 @@ import {
   TbFileSearch,
   TbCopy,
   TbSquareX,
+  TbKeyboard,
+  TbPalette,
   TbDownload,
   TbRefresh,
 } from 'react-icons/tb';
@@ -56,7 +58,9 @@ export function CommandPalette() {
     { id: 'copy-path', label: 'Copy path', icon: <TbCopy />, action: run(copyToClipboard, 'full') },
     { id: 'toggle-layout', label: 'Toggle layout', icon: <TbLayoutColumns />, action: toggleLayout, shortcut: 'toggleLayout' },
     { id: 'close-panel', label: 'Close panel', icon: <TbSquareX />, action: () => { if (panel) removePanel(panel.id); }, shortcut: 'closePanel' },
-    { id: 'settings', label: 'Settings', icon: <TbSettings />, action: toggleSettings, shortcut: 'settings' },
+    { id: 'settings', label: 'Settings', icon: <TbSettings />, action: () => toggleSettings(), shortcut: 'settings' },
+    { id: 'shortcuts', label: 'Keyboard shortcuts', icon: <TbKeyboard />, action: () => toggleSettings('shortcuts'), shortcut: 'shortcutsHelp' },
+    { id: 'git-colors', label: 'Change git colors', icon: <TbPalette />, action: () => toggleSettings('git') },
     state.update.status === 'available'
       ? { id: 'install-update', label: `Install update v${state.update.version} and restart`, icon: <TbDownload />, action: installUpdate }
       : { id: 'check-updates', label: 'Check for updates', icon: <TbRefresh />, action: () => checkUpdates(true) },
@@ -105,12 +109,13 @@ export function CommandPalette() {
 
   return (
     <div className="cmd-palette-overlay" onClick={() => toggleCommandPalette()}>
-      <div className="cmd-palette" onClick={e => e.stopPropagation()}>
+      <div className="cmd-palette" role="dialog" aria-label="Commands" onClick={e => e.stopPropagation()}>
         <input
           ref={inputRef}
           type="text"
           className="cmd-input"
           placeholder="Type a command or search..."
+          aria-label="Search commands"
           value={search}
           onChange={e => {
             setSearch(e.target.value);
@@ -131,7 +136,7 @@ export function CommandPalette() {
             >
               {cmd.icon}
               <span>{cmd.label}</span>
-              {cmd.shortcut && <kbd className="cmd-kbd">{formatCombo(KEYMAP[cmd.shortcut].combo)}</kbd>}
+              {cmd.shortcut && <kbd className="cmd-kbd">{formatCombo(comboFor(cmd.shortcut, state.settings.keybindings))}</kbd>}
             </div>
           ))}
           {filteredCommands.length === 0 && (

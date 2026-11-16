@@ -15,3 +15,19 @@ test('normalizeSettings clamps depth and cleans skip list', () => {
   assert.deepEqual(s.skipDirs, ['dist', 'out']);
   assert.equal(normalizeSettings({ scanDepth: 0 }).scanDepth, 1);
 });
+
+test('normalizeSettings keeps only valid git colors and key bindings', () => {
+  const s = normalizeSettings({
+    gitColors: { modified: '#AABBCC', staged: 'red', bogus: '#000000', untracked: '#12345' },
+    keybindings: { settings: 'Mod+K', quickOpen: 'K', focusPanel: 'Mod+X', nope: 'Mod+J', palette: 'F2' },
+  });
+  assert.deepEqual(s.gitColors, { modified: '#AABBCC' });
+  assert.deepEqual(s.keybindings, { settings: 'Mod+K', palette: 'F2' });
+});
+
+test('gitColor falls back to defaults', async () => {
+  const { gitColor, DEFAULT_GIT_COLORS } = await import('./settings.ts');
+  const s = normalizeSettings({ gitColors: { staged: '#010203' } });
+  assert.equal(gitColor(s, 'staged'), '#010203');
+  assert.equal(gitColor(s, 'modified'), DEFAULT_GIT_COLORS.modified);
+});

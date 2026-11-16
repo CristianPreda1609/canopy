@@ -7,7 +7,7 @@
 
 export type ShortcutId =
   | 'palette' | 'quickOpen' | 'settings' | 'addPanel' | 'closePanel'
-  | 'toggleLayout' | 'nextPanel' | 'prevPanel' | 'focusPanel';
+  | 'toggleLayout' | 'nextPanel' | 'prevPanel' | 'focusPanel' | 'shortcutsHelp';
 
 export const KEYMAP: Record<ShortcutId, { combo: string; label: string }> = {
   palette:      { combo: 'Mod+Shift+P', label: 'Command palette' },
@@ -19,6 +19,7 @@ export const KEYMAP: Record<ShortcutId, { combo: string; label: string }> = {
   nextPanel:    { combo: 'Mod+Tab',     label: 'Next panel' },
   prevPanel:    { combo: 'Mod+Shift+Tab', label: 'Previous panel' },
   focusPanel:   { combo: 'Mod+1…9',     label: 'Go to panel 1–9' },
+  shortcutsHelp: { combo: 'F1',         label: 'Keyboard shortcuts' },
 };
 
 /** Keys handled by the focused tree (no modifiers). Shown in docs/palette. */
@@ -33,8 +34,34 @@ export const TREE_KEYS: { keys: string; label: string }[] = [
   { keys: 'E', label: 'Reveal in file manager' },
 ];
 
+/** Mouse tips shown in the shortcuts guide. */
+export const MOUSE_TIPS: { keys: string; label: string }[] = [
+  { keys: 'Right-click', label: 'Context menu for a file or folder' },
+  { keys: 'Ctrl + hover', label: 'Context menu without clicking' },
+  { keys: 'Click folder', label: 'Expand / collapse (loads on demand)' },
+];
+
+/** Read-only sections of the shortcuts guide (Settings → Shortcuts). */
+export const REFERENCE_SECTIONS: { title: string; keys: { keys: string; label: string }[] }[] = [
+  { title: 'File tree (active panel)', keys: TREE_KEYS },
+  { title: 'Mouse', keys: MOUSE_TIPS },
+];
+
 /** The subset of KeyboardEvent we look at (makes this testable without a DOM). */
-export type KeyLike = Pick<KeyboardEvent, 'key' | 'ctrlKey' | 'metaKey' | 'shiftKey' | 'altKey'>;
+export type KeyLike = Pick<KeyboardEvent, 'key' | 'code' | 'ctrlKey' | 'metaKey' | 'shiftKey' | 'altKey'>;
+
+/**
+ * The key a user *pressed*, layout-independent for letters and digits.
+ * With Alt/Option held, macOS reports e.key as a symbol (Option+H = "˙"),
+ * so we read the physical key from e.code ("KeyH" -> "h", "Digit3" -> "3").
+ */
+export function pressedKey(e: KeyLike): string {
+  if (e.altKey && e.code) {
+    const m = /^(?:Key([A-Z])|Digit([0-9]))$/.exec(e.code);
+    if (m) return (m[1] ?? m[2]).toLowerCase();
+  }
+  return e.key.length === 1 ? e.key.toLowerCase() : e.key;
+}
 
 export const isMacPlatform = (): boolean =>
   typeof navigator !== 'undefined' && /Mac/i.test(navigator.userAgent);
@@ -49,7 +76,7 @@ export function matchesCombo(e: KeyLike, combo: string, isMac = isMacPlatform())
   if (want.has('Mod') !== mod || otherMod) return false;
   if (want.has('Shift') !== e.shiftKey) return false;
   if (want.has('Alt') !== e.altKey) return false;
-  return e.key.toLowerCase() === key.toLowerCase();
+  return pressedKey(e) === (key.length === 1 ? key.toLowerCase() : key);
 }
 
 /** "Mod+1"…"Mod+9" → 0…8, otherwise null. */
@@ -65,4 +92,68 @@ export function formatCombo(combo: string, isMac = isMacPlatform()): string {
   if (!isMac) return parts.map(p => (p === 'Mod' ? 'Ctrl' : p)).join('+');
   const sym: Record<string, string> = { Mod: '⌘', Shift: '⇧', Alt: '⌥', Ctrl: '⌃' };
   return parts.map(p => sym[p] ?? p).join('');
+}
+
+// ─── Custom key bindings ────────────────────────────────────────────
+
+/**
+ * Set while Settings is recording a new shortcut, so the global handler
+ * doesn't act on the keys being recorded.
+ */
+export const shortcutRecorder = { active: false };
+
+export type KeyBindings = Partial<Record<ShortcutId, string>>;
+
+/** Shortcuts that can't be rebound (they're a family, not a single combo). */
+export const FIXED_SHORTCUTS: ShortcutId[] = ['focusPanel'];
+
+export const isRebindable = (id: ShortcutId) => !FIXED_SHORTCUTS.includes(id);
+
+/** The combo in effect for `id`: the user's override, or the default. */
+export function comboFor(id: ShortcutId, bindings: KeyBindings = {}): string {
+  return (isRebindable(id) && bindings[id]) || KEYMAP[id].combo;
+}
+
+const MODIFIER_KEYS = new Set(['Control', 'Shift', 'Alt', 'Meta', 'AltGraph', 'CapsLock', 'OS']);
+
+/**
+ * Turn a key press into a combo string ("Mod+Shift+K", "Alt+F2", "F1").
+ * Returns null while only modifiers are held.
+ */
+export function comboFromEvent(e: KeyLike, isMac = isMacPlatform()): string | null {
+  if (MODIFIER_KEYS.has(e.key)) return null;
+  const parts: string[] = [];
+  if (isMac ? e.metaKey : e.ctrlKey) parts.push('Mod');
+  if (isMac && e.ctrlKey) parts.push('Ctrl');
+  if (e.altKey) parts.push('Alt');
+  if (e.shiftKey) parts.push('Shift');
+  // Physical letters/digits regardless of layout. Build a plain object:
+  // spreading a real KeyboardEvent copies nothing (its fields are prototype getters).
+  const k = pressedKey({
+    key: e.key, code: e.code, altKey: true, ctrlKey: e.ctrlKey, metaKey: e.metaKey, shiftKey: e.shiftKey,
+  });
+  parts.push(k.length === 1 ? k.toUpperCase() : k);
+  return parts.join('+');
+}
+
+/**
+ * A binding must not steal plain typing or tree navigation keys: it needs
+ * Mod or Alt, unless it's a function key (F1–F12).
+ */
+export function isValidBinding(combo: string): boolean {
+  const parts = combo.split('+');
+  const key = parts[parts.length - 1];
+  if (!key || ['Escape', 'Backspace', 'Enter', 'Tab'].includes(key) && parts.length === 1) return false;
+  if (/^F([1-9]|1[0-2])$/.test(key)) return true;
+  return parts.includes('Mod') || parts.includes('Alt');
+}
+
+const normalizeCombo = (c: string) => c.toLowerCase();
+
+/** Another shortcut already using `combo` (with current bindings), if any. */
+export function findConflict(id: ShortcutId, combo: string, bindings: KeyBindings = {}): ShortcutId | null {
+  for (const other of Object.keys(KEYMAP) as ShortcutId[]) {
+    if (other !== id && normalizeCombo(comboFor(other, bindings)) === normalizeCombo(combo)) return other;
+  }
+  return null;
 }

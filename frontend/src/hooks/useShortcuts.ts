@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { useAppContext } from '../contexts/AppContext';
-import { KEYMAP, matchesCombo, panelIndexFromEvent } from '../keymap';
+import { KEYMAP, matchesCombo, panelIndexFromEvent, comboFor, shortcutRecorder } from '../keymap';
 import { visibleNodes } from '../contexts/tree';
 import { targetPaths } from '../services/paths';
 import { openInVSCode, openTerminal, revealInExplorer, copyToClipboard } from '../services/tauri';
@@ -28,6 +28,7 @@ export function useShortcuts() {
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
+      if (shortcutRecorder.active) return;
       const c = ctxRef.current;
       const { state } = c;
 
@@ -35,7 +36,8 @@ export function useShortcuts() {
       const app: [keyof typeof KEYMAP, () => void][] = [
         ['palette', c.toggleCommandPalette],
         ['quickOpen', c.toggleQuickOpen],
-        ['settings', c.toggleSettings],
+        ['settings', () => c.toggleSettings()],
+        ['shortcutsHelp', () => c.toggleSettings('shortcuts')],
         ['addPanel', c.addPanel],
         ['closePanel', () => { if (state.activePanelId) c.removePanel(state.activePanelId); }],
         ['toggleLayout', c.toggleLayout],
@@ -43,7 +45,7 @@ export function useShortcuts() {
         ['nextPanel', () => { c.cyclePanel(1); scrollSelectionIntoView(); }],
       ];
       for (const [id, action] of app) {
-        if (matchesCombo(e, KEYMAP[id].combo)) {
+        if (matchesCombo(e, comboFor(id, state.settings.keybindings))) {
           e.preventDefault(); // also stops WebView defaults like Ctrl+P = print
           action();
           return;
