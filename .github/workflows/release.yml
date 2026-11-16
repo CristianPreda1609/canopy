@@ -60,17 +60,33 @@ jobs:
         with:
           workspaces: src-tauri
 
-      # Updates are signed with TAURI_SIGNING_PRIVATE_KEY. Without that secret
-      # the release still builds, just without auto-update files (latest.json).
-      - name: Updater signing
-        id: updater
+      # Per-build config overrides, merged into one --config JSON:
+      #  - no TAURI_SIGNING_PRIVATE_KEY secret -> build without update files
+      #  - tags containing "-tiling" (e.g. v0.2.0-tiling.1) -> "Canopy Tiling",
+      #    a separate app id so it installs side by side with Canopy
+      - name: Build config
+        id: config
         shell: bash
         env:
           KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAG: ${{ github.ref_name }}
         run: |
+          parts=()
           if [ -z "$KEY" ]; then
             echo "::warning::TAURI_SIGNING_PRIVATE_KEY is not set; building without auto-update artifacts"
-            echo "args=--config '{\"bundle\":{\"createUpdaterArtifacts\":false}}'" >> "$GITHUB_OUTPUT"
+            parts+=('"bundle":{"createUpdaterArtifacts":false}')
+          fi
+          case "$TAG" in
+            *-tiling*)
+              parts+=('"productName":"Canopy Tiling"' '"identifier":"com.cristianpreda.canopy.tiling"')
+              echo "name=Canopy Tiling $TAG" >> "$GITHUB_OUTPUT" ;;
+            *)
+              echo "name=Canopy $TAG" >> "$GITHUB_OUTPUT" ;;
+          esac
+          if [ ${#parts[@]} -gt 0 ]; then
+            json="{$(IFS=,; echo "${parts[*]}")}"
+            echo "Config override: $json"
+            echo "args=--config '$json'" >> "$GITHUB_OUTPUT"
           fi
 
       - uses: tauri-apps/tauri-action@v0
@@ -81,9 +97,10 @@ jobs:
         with:
           tauriScript: npx --yes @tauri-apps/cli@2
           tagName: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
-          releaseName: 'Canopy ${{ github.ref_name }}'
+          releaseName: ${{ steps.config.outputs.name }}
           releaseBody: 'See the assets below to download Canopy for your platform.'
           releaseDraft: true
-          prerelease: false
-          args: ${{ matrix.args }} ${{ steps.updater.outputs.args }}
+          # Tags with a suffix (v1.2.0-beta, v0.2.0-tiling.1) are pre-releases
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          args: ${{ matrix.args }} ${{ steps.config.outputs.args }}
           includeUpdaterJson: true
