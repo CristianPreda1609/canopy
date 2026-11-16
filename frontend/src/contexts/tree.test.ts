@@ -65,3 +65,18 @@ test('detectBadge picks the most common file type', () => {
   ]), 'Python');
   assert.equal(detectBadge([]), undefined);
 });
+
+test('visibleNodes lists only expanded rows, in display order', async () => {
+  const { visibleNodes } = await import('./tree.ts');
+  const tree: TreeNode[] = [{
+    name: 'root', type: 'folder', collapsed: false, children: [
+      { name: 'b', type: 'folder', compactPath: 'a / ', collapsed: false, children: [{ name: 'x.ts', type: 'file' }] },
+      { name: 'closed', type: 'folder', collapsed: true, children: [{ name: 'hidden.ts', type: 'file' }] },
+      { name: 'z.md', type: 'file' },
+    ],
+  }];
+  const rows = visibleNodes(tree);
+  assert.deepEqual(rows.map(r => r.realPath.join('/')), ['root', 'root/a/b', 'root/a/b/x.ts', 'root/closed', 'root/z.md']);
+  assert.deepEqual(rows[2].namePath, ['root', 'b', 'x.ts']);
+  assert.equal(rows[2].depth, 2);
+});

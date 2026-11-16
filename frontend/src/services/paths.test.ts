@@ -29,3 +29,11 @@ test('parentDir', () => {
   assert.equal(parentDir('/home/u/a.ts'), '/home/u');
   assert.equal(parentDir('/a.ts'), '/');
 });
+
+test('targetPaths: folder vs file vs nothing selected', async () => {
+  const { targetPaths } = await import('./paths.ts');
+  assert.deepEqual(targetPaths('C:\\p', 'p/src', true), { full: 'C:\\p\\src', folder: 'C:\\p\\src' });
+  assert.deepEqual(targetPaths('C:\\p', 'p/a.ts', false), { full: 'C:\\p\\a.ts', folder: 'C:\\p' });
+  assert.deepEqual(targetPaths('/home/u/p', 'p/src/a.ts', false), { full: '/home/u/p/src/a.ts', folder: '/home/u/p/src' });
+  assert.deepEqual(targetPaths('/home/u/p', null, false), { full: '/home/u/p', folder: '/home/u/p' });
+});

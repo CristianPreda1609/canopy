@@ -124,3 +124,25 @@ export function detectBadge(nodes: TreeNode[]): string | undefined {
   const top = Object.entries(counts).sort(([, a], [, b]) => b - a)[0]?.[0];
   return top ? BADGES[top] || top : undefined;
 }
+
+/** One row of the tree as currently displayed (for keyboard navigation). */
+export type VisibleNode = {
+  node: TreeNode;
+  namePath: string[];
+  realPath: string[];
+  depth: number;
+};
+
+/** Flatten the tree into the rows that are on screen, top to bottom. */
+export function visibleNodes(nodes: TreeNode[], parentNames: string[] = [], parentReal: string[] = [], depth = 0): VisibleNode[] {
+  const out: VisibleNode[] = [];
+  for (const node of nodes) {
+    const namePath = [...parentNames, node.name];
+    const realPath = realSegmentsOf(parentReal, node);
+    out.push({ node, namePath, realPath, depth });
+    if (node.type === 'folder' && !node.collapsed && node.children) {
+      out.push(...visibleNodes(node.children, namePath, realPath, depth + 1));
+    }
+  }
+  return out;
+}

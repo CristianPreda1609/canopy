@@ -105,3 +105,22 @@ export async function unwatchDirectory(panelId: string): Promise<void> {
   const {invoke} = await import('@tauri-apps/api/core');
   await invoke('unwatch_directory', { panelId });
 }
+export type FileList = { files: string[]; truncated: boolean };
+
+/** Every file under `path` (relative, `/`-separated), for "Go to file". */
+export async function listFiles(path: string, opts: Omit<ScanOptions, 'depth'> = {}): Promise<FileList> {
+  if (!isTauri) {
+    const demo: Record<string, string[]> = {
+      ml_thesis: ['models/bert_finetune/bert_finetune.py', 'models/bert_finetune/train.py', 'models/bert_finetune/eval.py', 'notebooks/explore.ipynb', 'requirements.txt'],
+      embedded: ['platformio_proj/src/main.cpp', 'platformio_proj/include/config.h', 'platformio_proj/platformio.ini'],
+      web_app: ['web_app/src/components/App.tsx', 'web_app/src/components/AppContext.tsx', 'web_app/package.json', 'web_app/vite.config.ts'],
+    };
+    return { files: demo[path.split('/').pop() ?? ''] ?? [], truncated: false };
+  }
+  const { invoke } = await import('@tauri-apps/api/core');
+  return invoke<FileList>('list_files', {
+    path,
+    showHidden: opts.showHidden,
+    skipDirs: opts.skipDirs ?? undefined,
+  });
+}

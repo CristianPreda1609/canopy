@@ -57,13 +57,22 @@ export type ContextMenuState = {
   isFolder?: boolean;
 } | null;
 
+/** The highlighted tree row. `path` is the real tree path ("<root>/a/b.ts"). */
+export type Selection = {
+  panelId: string;
+  path: string;
+  namePath: string[];
+  isFolder: boolean;
+} | null;
+
 export type AppState = {
   panels: PanelItem[];
   activePanelId: string;
   status: string;
-  selectedFile: string | null;
+  selection: Selection;
   commandPaletteOpen: boolean;
   settingsOpen: boolean;
+  quickOpenOpen: boolean;
   contextMenu: ContextMenuState;
   treeData: Record<string, TreeNode[]>;
   layout: Layout;
@@ -75,9 +84,14 @@ type AppContextType = {
   setActivePanelId: (id: string) => void;
   removePanel: (id: string) => void;
   addPanel: () => void;
-  setSelectedFile: (path: string | null) => void;
+  setSelection: (sel: Selection) => void;
   toggleCommandPalette: () => void;
   toggleSettings: () => void;
+  toggleQuickOpen: () => void;
+  /** Focus the panel at `index` (0-based); also moves the selection there. */
+  focusPanel: (index: number) => void;
+  /** Focus the next (+1) or previous (-1) panel, wrapping around. */
+  cyclePanel: (delta: number) => void;
   updateSettings: (s: Settings) => void;
   openContextMenu: (x: number, y: number, targetPath: string, panelPath?: string, isFolder?: boolean) => void;
   closeContextMenu: () => void;
@@ -129,9 +143,10 @@ const mockTreeData: Record<string, TreeNode[]> = {
 };
 
 const mockPanels: PanelItem[] = [
-  { id: "1", title: "ml_thesis", badge: "Python" },
-  { id: "2", title: "embedded", badge: "C++" },
-  { id: "3", title: "web_app", badge: "JS" },
+  // Fake paths so path-based UI (Go to file, context menu) works in browser mode
+  { id: "1", title: "ml_thesis", badge: "Python", path: "/demo/ml_thesis" },
+  { id: "2", title: "embedded", badge: "C++", path: "/demo/embedded" },
+  { id: "3", title: "web_app", badge: "JS", path: "/demo/web_app" },
 ];
 
 // ─── Helpers ────────────────────────────────────────────────────────
@@ -169,9 +184,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     panels: isTauri ? [] : mockPanels,
     activePanelId: isTauri ? "" : "1",
     status: "✓ running",
-    selectedFile: null,
+    selection: null,
     commandPaletteOpen: false,
     settingsOpen: false,
+    quickOpenOpen: false,
     contextMenu: null,
     treeData: isTauri ? {} : mockTreeData,
     layout: loadLayout(),
@@ -311,6 +327,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         panels: updated,
         treeData,
         activePanelId: prev.activePanelId === id ? (updated[0]?.id ?? "") : prev.activePanelId,
+        selection: prev.selection?.panelId === id ? null : prev.selection,
       };
     });
   };
@@ -343,14 +360,48 @@ export function AppProvider({ children }: { children: ReactNode }) {
       return { ...prev, layout };
     });
 
-  const setSelectedFile = (path: string | null) =>
-    setState(prev => ({ ...prev, selectedFile: path }));
+  const setSelection = (selection: Selection) =>
+    setState(prev => ({
+      ...prev,
+      selection,
+      activePanelId: selection?.panelId ?? prev.activePanelId,
+    }));
+
+  /** Only one overlay (palette, settings, quick open) is open at a time. */
+  const NO_OVERLAYS = { commandPaletteOpen: false, settingsOpen: false, quickOpenOpen: false };
 
   const toggleCommandPalette = () =>
-    setState(prev => ({ ...prev, commandPaletteOpen: !prev.commandPaletteOpen, settingsOpen: false }));
+    setState(prev => ({ ...prev, ...NO_OVERLAYS, commandPaletteOpen: !prev.commandPaletteOpen }));
 
   const toggleSettings = () =>
-    setState(prev => ({ ...prev, settingsOpen: !prev.settingsOpen, commandPaletteOpen: false }));
+    setState(prev => ({ ...prev, ...NO_OVERLAYS, settingsOpen: !prev.settingsOpen }));
+
+  const toggleQuickOpen = () =>
+    setState(prev => ({ ...prev, ...NO_OVERLAYS, quickOpenOpen: !prev.quickOpenOpen }));
+
+  const focusPanelById = (prev: AppState, panelId: string): AppState => {
+    if (prev.selection?.panelId === panelId) return { ...prev, activePanelId: panelId };
+    const root = prev.treeData[panelId]?.[0];
+    return {
+      ...prev,
+      activePanelId: panelId,
+      selection: root ? { panelId, path: root.name, namePath: [root.name], isFolder: true } : null,
+    };
+  };
+
+  const focusPanel = (index: number) =>
+    setState(prev => {
+      const panel = prev.panels[index];
+      return panel ? focusPanelById(prev, panel.id) : prev;
+    });
+
+  const cyclePanel = (delta: number) =>
+    setState(prev => {
+      if (prev.panels.length === 0) return prev;
+      const cur = Math.max(0, prev.panels.findIndex(p => p.id === prev.activePanelId));
+      const next = (cur + delta + prev.panels.length) % prev.panels.length;
+      return focusPanelById(prev, prev.panels[next].id);
+    });
 
   /** Save settings and rescan every panel with them. */
   const updateSettings = (next: Settings) => {
@@ -400,7 +451,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   return (
     <AppContext.Provider value={{
       state, setActivePanelId, removePanel, addPanel,
-      setSelectedFile, toggleCommandPalette, toggleSettings, updateSettings,
+      setSelection, toggleCommandPalette, toggleSettings, toggleQuickOpen, updateSettings,
+      focusPanel, cyclePanel,
       openContextMenu, closeContextMenu, toggleNodeCollapse, toggleLayout,
     }}>
       {children}

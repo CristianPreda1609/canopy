@@ -250,13 +250,37 @@ Copy `icons/64x64.png` to `frontend/public/favicon.png` and `icons/128x128.png` 
 
 ### Keyboard Shortcuts
 
-| Shortcut              | Action                                  |
-|-----------------------|-----------------------------------------|
-| `Ctrl + Shift + P`    | Open / close the command palette        |
-| `↑` / `↓`             | Move the selection in the palette       |
-| `Enter`               | Run the selected command                |
-| `Esc`                 | Close the palette or context menu       |
-| `Ctrl` + hover        | Open the context menu on a tree item    |
+Canopy can be used entirely from the keyboard. On macOS, use `⌘` instead of `Ctrl`.
+
+**App**
+
+| Shortcut | Action |
+|----------|--------|
+| `Ctrl+Shift+P` | Command palette |
+| `Ctrl+P` | Go to file (fuzzy search across all panels) |
+| `Ctrl+,` | Settings |
+| `Ctrl+O` | Open a folder in a new panel |
+| `Ctrl+W` | Close the active panel |
+| `Ctrl+\` | Toggle grid / row layout |
+| `Ctrl+1` … `Ctrl+9` | Jump to panel 1–9 |
+| `Ctrl+Tab` / `Ctrl+Shift+Tab` | Next / previous panel |
+| `Esc` | Close the palette, dialog or context menu |
+
+**File tree** (active panel)
+
+| Key | Action |
+|-----|--------|
+| `↑` `↓` or `K` `J` | Move the selection |
+| `→` or `L` | Expand a folder, or move to its first child |
+| `←` or `H` | Collapse a folder, or move to its parent |
+| `Enter` / `Space` | Toggle a folder, or open the file in VS Code |
+| `Home` / `End` | First / last item |
+| `Y` | Copy the full path |
+| `T` | Open a terminal in that folder |
+| `E` | Reveal in the file manager |
+| `Ctrl` + hover | Open the context menu on an item |
+
+**Go to file** (`Ctrl+P`): `Enter` opens the file in VS Code, and `Shift+Enter` reveals it in the file manager. Search covers every file in open panels, including folders that haven't loaded in the tree yet (up to 20,000 files per panel).
 
 ### Command Palette
 
@@ -335,6 +359,7 @@ All commands live in `src-tauri/src/lib.rs` and return `Result<T, String>`.
 |---------|-----------|---------|-------------|
 | `read_directory` | `path`, `depth?`, `showHidden?`, `skipDirs?` | `FileNode[]` | Scan `depth` levels (default 3, max 12), sorted and compacted. Deeper and skipped folders return `unloaded: true` |
 | `default_skip_dirs` | – | `string[]` | The built-in list of skipped folders |
+| `list_files` | `path`, `showHidden?`, `skipDirs?`, `limit?` | `{ files, truncated }` | Every file under `path` (relative paths), breadth-first, for Go to file. Runs on a worker thread |
 | `get_git_info` | `path` | `GitStatus \| null` | Branch, dirty flag and per-file status. Returns `null` if the folder isn't a repository |
 | `watch_directory` | `panelId`, `path` | `()` | Starts a recursive watcher that emits `file_changed` |
 | `unwatch_directory` | `panelId` | `()` | Stops the panel's watcher |
@@ -402,7 +427,7 @@ A strict **Content Security Policy** is also set in `tauri.conf.json`. It allows
 - [x] CI on all three OSes, plus automated release builds
 - [x] Settings panel (scan depth, hidden files, skipped folders)
 - [x] Lazy loading of deep and skipped folders
-- [ ] Keyboard shortcuts: tree navigation, shortcut hints and file search
+- [x] Keyboard shortcuts, tree navigation and Go to file (`Ctrl+P`)
 - [ ] Auto-updater
 - [ ] Sign and notarize the macOS builds.
 

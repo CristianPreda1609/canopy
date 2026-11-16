@@ -1,4 +1,3 @@
-import { useEffect } from "react";
 import { TitleBar } from "./components/TitleBar";
 import { Panels } from "./components/Panels";
 import { StatusBar } from "./components/StatusBar";
@@ -6,20 +5,12 @@ import { CommandPalette } from "./components/CommandPalette";
 import { ContextMenu } from "./components/ContextMenu";
 import { SettingsPanel } from "./components/SettingsPanel";
 import { useAppContext } from "./contexts/AppContext";
+import { useShortcuts } from "./hooks/useShortcuts";
+import { QuickOpen } from "./components/QuickOpen";
 
 function App() {
-  const { state, toggleCommandPalette } = useAppContext();
-
-  useEffect(() => {
-    const handleGlobalKeyDown = (e: KeyboardEvent) => {
-      if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 'p') {
-        e.preventDefault();
-        toggleCommandPalette();
-      }
-    };
-    window.addEventListener('keydown', handleGlobalKeyDown);
-    return () => window.removeEventListener('keydown', handleGlobalKeyDown);
-  }, [toggleCommandPalette]);
+  const { state } = useAppContext();
+  useShortcuts();
 
   return (
     <div className="app-wrap">
@@ -31,7 +22,7 @@ function App() {
           <Panels items={state.panels} />
           <StatusBar 
             infopans={`${state.panels.length} panels`} 
-            folder_files={state.selectedFile || "No file selected"} 
+            folder_files={state.selection?.path || "Nothing selected"} 
             state={state.status} 
           />
         </div>
@@ -39,6 +30,7 @@ function App() {
       <CommandPalette />
       <ContextMenu />
       {state.settingsOpen && <SettingsPanel />}
+      {state.quickOpenOpen && <QuickOpen />}
     </div>
   );
 }

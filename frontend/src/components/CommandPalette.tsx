@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useAppContext } from '../contexts/AppContext';
-import { resolveTreePath, parentDir, fileManagerName } from '../services/paths';
-import { openInVSCode, openTerminal, openInExplorer, revealInExplorer } from '../services/tauri';
+import { targetPaths, fileManagerName } from '../services/paths';
+import { openInVSCode, openTerminal, openInExplorer, revealInExplorer, copyToClipboard } from '../services/tauri';
+import { KEYMAP, formatCombo, type ShortcutId } from '../keymap';
+import { fuzzyFilter } from '../fuzzy';
 import {
   TbFolderPlus,
   TbBrandVscode,
@@ -9,7 +11,10 @@ import {
   TbFolderOpen,
   TbLayoutColumns,
   TbSettings,
-  TbExternalLink
+  TbExternalLink,
+  TbFileSearch,
+  TbCopy,
+  TbSquareX,
 } from 'react-icons/tb';
 
 type CommandItem = {
@@ -17,55 +22,43 @@ type CommandItem = {
   label: string;
   icon: React.ReactNode;
   action: () => void;
+  /** Shortcut to show next to the command */
+  shortcut?: ShortcutId;
 };
 
 export function CommandPalette() {
-  const { state, toggleCommandPalette, addPanel, toggleLayout, toggleSettings } = useAppContext();
+  const {
+    state, toggleCommandPalette, addPanel, toggleLayout, toggleSettings, toggleQuickOpen, removePanel,
+  } = useAppContext();
   const [search, setSearch] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const getTargetFullPath = () => {
-    const panel = state.panels.find(p => p.id === state.activePanelId);
-    if (!panel || !panel.path) return null;
-    return state.selectedFile ? resolveTreePath(panel.path, state.selectedFile) : panel.path;
-  };
-
-  const getPanelPath = () => {
-    const panel = state.panels.find(p => p.id === state.activePanelId);
-    return panel?.path || null;
-  };
-
-  const getParentPath = () => {
-    const panel = state.panels.find(p => p.id === state.activePanelId);
-    if (!panel?.path) return null;
-    
-    // selectedFile is always a file (folders toggle instead of selecting),
-    // so its containing folder is where the terminal / file manager should open
-    return state.selectedFile ? parentDir(resolveTreePath(panel.path, state.selectedFile)) : panel.path;
-  };
-  const wrapAction = (action: (p: string) => Promise<void>) => () => {
-    const path = getTargetFullPath();
-    if (path) {
-      action(path).catch(err => console.error(err));
-    } else {
-      console.warn("No active path to run command on");
-    }
+  // Commands act on the selected item of the active panel (or its root)
+  const panel = state.panels.find(p => p.id === state.activePanelId);
+  const sel = state.selection?.panelId === panel?.id ? state.selection : null;
+  const targets = panel?.path ? targetPaths(panel.path, sel?.path ?? null, sel?.isFolder ?? true) : null;
+  const run = (fn: (path: string) => Promise<void>, which: 'full' | 'folder' | 'root') => () => {
+    const path = which === 'root' ? panel?.path : targets?.[which];
+    if (path) fn(path).catch(console.error);
   };
 
   const commands: CommandItem[] = [
-    { id: 'add-folder', label: 'Open folder in panel', icon: <TbFolderPlus />, action: () => addPanel() },
-    { id: 'open-vscode', label: 'Open in VSCode', icon: <TbBrandVscode />, action: () => { const p = getPanelPath(); if (p) openInVSCode(p).catch(console.error); } },
-    { id: 'open-terminal', label: 'Open terminal here', icon: <TbTerminal />, action: () => { const p = getParentPath(); if (p) openTerminal(p).catch(console.error); } },
-    { id: 'open-explorer',  label: `Open in ${fileManagerName}`, icon: <TbFolderOpen />, action: () => { const p = getParentPath(); if (p) openInExplorer(p).catch(console.error); } },
-    { id: 'reveal-explorer', label: `Reveal in ${fileManagerName}`, icon: <TbExternalLink />, action: wrapAction(revealInExplorer) },
-    { id: 'toggle-layout', label: 'Toggle layout', icon: <TbLayoutColumns />, action: toggleLayout },
-    { id: 'settings', label: 'Settings', icon: <TbSettings />, action: toggleSettings },
+    { id: 'quick-open', label: 'Go to file…', icon: <TbFileSearch />, action: toggleQuickOpen, shortcut: 'quickOpen' },
+    { id: 'add-folder', label: 'Open folder in panel', icon: <TbFolderPlus />, action: () => addPanel(), shortcut: 'addPanel' },
+    { id: 'open-vscode', label: 'Open project in VS Code', icon: <TbBrandVscode />, action: run(openInVSCode, 'root') },
+    { id: 'open-terminal', label: 'Open terminal here', icon: <TbTerminal />, action: run(openTerminal, 'folder') },
+    { id: 'open-explorer', label: `Open in ${fileManagerName}`, icon: <TbFolderOpen />, action: run(openInExplorer, 'folder') },
+    { id: 'reveal-explorer', label: `Reveal in ${fileManagerName}`, icon: <TbExternalLink />, action: run(revealInExplorer, 'full') },
+    { id: 'copy-path', label: 'Copy path', icon: <TbCopy />, action: run(copyToClipboard, 'full') },
+    { id: 'toggle-layout', label: 'Toggle layout', icon: <TbLayoutColumns />, action: toggleLayout, shortcut: 'toggleLayout' },
+    { id: 'close-panel', label: 'Close panel', icon: <TbSquareX />, action: () => { if (panel) removePanel(panel.id); }, shortcut: 'closePanel' },
+    { id: 'settings', label: 'Settings', icon: <TbSettings />, action: toggleSettings, shortcut: 'settings' },
   ];
 
-  const filteredCommands = commands.filter(cmd => 
-    cmd.label.toLowerCase().includes(search.toLowerCase())
-  );
+  const filteredCommands = search.trim()
+    ? fuzzyFilter(search, commands, c => c.label).map(r => r.item)
+    : commands;
 
   // Reset the query each time the palette opens (adjust state during render,
   // instead of setState inside an effect, which causes a cascading render).
@@ -132,6 +125,7 @@ export function CommandPalette() {
             >
               {cmd.icon}
               <span>{cmd.label}</span>
+              {cmd.shortcut && <kbd className="cmd-kbd">{formatCombo(KEYMAP[cmd.shortcut].combo)}</kbd>}
             </div>
           ))}
           {filteredCommands.length === 0 && (

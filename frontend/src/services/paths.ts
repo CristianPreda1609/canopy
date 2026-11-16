@@ -34,3 +34,14 @@ export function parentDir(absPath: string): string {
   const parent = absPath.slice(0, idx);
   return /^[A-Za-z]:$/.test(parent) ? parent + '\\' : parent; // keep "C:\" a valid root
 }
+
+/**
+ * Absolute paths for acting on a tree item: `full` is the item itself,
+ * `folder` is where a terminal / file manager should open (the item if it's a
+ * folder, otherwise its containing folder). No tree path = the panel root.
+ */
+export function targetPaths(panelRoot: string, treePath: string | null, isFolder: boolean) {
+  if (!treePath) return { full: panelRoot, folder: panelRoot };
+  const full = resolveTreePath(panelRoot, treePath);
+  return { full, folder: isFolder ? full : parentDir(full) };
+}

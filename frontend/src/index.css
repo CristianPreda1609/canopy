@@ -362,3 +362,28 @@ html,body,#root{
   background: linear-gradient(135deg, var(--color-accent), #c040a0); border-color: transparent; color: #fff;
 }
 .settings-btn.primary:hover { filter: brightness(1.1); }
+
+/* Shortcut hints */
+.cmd-kbd {
+  margin-left: auto; font-family: var(--font-sans); font-size: 10px; color: var(--color-text-dim);
+  background: rgba(255,255,255,0.05); border: 0.5px solid var(--color-border); border-radius: 4px; padding: 1px 6px;
+}
+.cmd-item.selected .cmd-kbd { color: var(--color-text-muted); }
+
+/* Go to file */
+.qo-name { color: var(--color-text-main); white-space: nowrap; }
+.qo-dir {
+  margin-left: 8px; font-size: 11px; color: var(--color-text-dim);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0;
+}
+.qo-panel { color: var(--color-text-muted); }
+.qo-hit { background: none; color: var(--color-accent-hover); font-weight: 600; }
+.qo-muted { color: var(--color-text-dim); cursor: default; }
+.qo-footer {
+  display: flex; gap: 16px; padding: 8px 16px; font-size: 10px; color: var(--color-text-dim);
+  border-top: 1px solid var(--color-border); background: rgba(255,255,255,0.02);
+}
+.qo-warn { margin-left: auto; color: var(--color-accent-hover); }
+
+/* Keyboard focus ring for the selected tree row */
+.tree-item.sel { outline: 1px solid rgba(240,112,48,0.25); outline-offset: -1px; }

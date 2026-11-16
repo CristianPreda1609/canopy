@@ -56,6 +56,10 @@ const DEFAULT_SCAN_DEPTH: usize = 3;
 /// Hard cap on levels per request, to keep a single scan bounded
 const MAX_SCAN_DEPTH: usize = 12;
 
+/// Files returned by `list_files` unless the caller asks otherwise
+const DEFAULT_LIST_LIMIT: usize = 20_000;
+const MAX_LIST_LIMIT: usize = 100_000;
+
 /// Minimum time between `file_changed` events for one panel
 const EMIT_THROTTLE: Duration = Duration::from_millis(200);
 
@@ -193,6 +197,69 @@ fn read_directory(
         skip_dirs: skip_dirs.unwrap_or_else(default_skip_dirs),
     };
     Ok(compact_tree(build_tree(p, 0, &opts)?))
+}
+
+/// Result of `list_files`: relative paths using `/`, plus whether the cap was hit.
+#[derive(Serialize)]
+pub struct FileList {
+    files: Vec<String>,
+    truncated: bool,
+}
+
+/// Collect file paths under `root` (relative, `/`-separated), breadth-first so
+/// shallow files come first if the cap is hit. Skipped and hidden folders are
+/// not entered.
+fn collect_files(root: &Path, opts: &ScanOptions, limit: usize) -> FileList {
+    let mut files = Vec::new();
+    let mut queue = std::collections::VecDeque::from([(root.to_path_buf(), String::new())]);
+    while let Some((dir, rel)) = queue.pop_front() {
+        let Ok(entries) = std::fs::read_dir(&dir) else { continue };
+        let mut entries: Vec<_> = entries.flatten().collect();
+        entries.sort_by_key(|e| e.file_name().to_string_lossy().to_lowercase());
+        for entry in entries {
+            let name = entry.file_name().to_string_lossy().to_string();
+            if !opts.show_hidden && name.starts_with('.') {
+                continue;
+            }
+            let child_rel = if rel.is_empty() { name.clone() } else { format!("{}/{}", rel, name) };
+            let Ok(ft) = entry.file_type() else { continue };
+            if ft.is_dir() {
+                if !opts.skips(&name) {
+                    queue.push_back((entry.path(), child_rel));
+                }
+            } else {
+                if files.len() >= limit {
+                    return FileList { files, truncated: true };
+                }
+                files.push(child_rel);
+            }
+        }
+    }
+    FileList { files, truncated: false }
+}
+
+/// List every file in a panel for quick-open search. Runs on a worker thread
+/// so a big repo never blocks the UI.
+#[tauri::command]
+async fn list_files(
+    path: String,
+    show_hidden: Option<bool>,
+    skip_dirs: Option<Vec<String>>,
+    limit: Option<usize>,
+) -> Result<FileList, String> {
+    let root = std::path::PathBuf::from(&path);
+    if !root.is_dir() {
+        return Err(format!("Path is not a directory: {}", path));
+    }
+    let opts = ScanOptions {
+        max_depth: usize::MAX,
+        show_hidden: show_hidden.unwrap_or(false),
+        skip_dirs: skip_dirs.unwrap_or_else(default_skip_dirs),
+    };
+    let limit = limit.unwrap_or(DEFAULT_LIST_LIMIT).min(MAX_LIST_LIMIT);
+    tauri::async_runtime::spawn_blocking(move || collect_files(&root, &opts, limit))
+        .await
+        .map_err(|e| format!("File listing failed: {}", e))
 }
 
 /// The built-in list of skipped directories (shown in Settings as the default).
@@ -493,6 +560,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             read_directory,
             default_skip_dirs,
+            list_files,
             open_in_vscode,
             open_terminal,
             open_in_explorer,
@@ -627,6 +695,24 @@ mod tests {
             let tree = build_tree(root, 0, &opts(8)).unwrap();
             let nm = tree.iter().find(|n| n.name == "node_modules").unwrap();
             assert!(nm.unloaded && nm.children.is_none());
+        });
+    }
+
+    #[test]
+    fn lists_files_breadth_first_and_skips() {
+        with_tree("list", &["b.txt", "src/a.rs", "src/deep/c.rs", "node_modules/x/i.js", ".env"], |root| {
+            let out = collect_files(root, &opts(8), 100);
+            assert_eq!(out.files, vec!["b.txt", "src/a.rs", "src/deep/c.rs"]);
+            assert!(!out.truncated);
+        });
+    }
+
+    #[test]
+    fn list_files_respects_limit() {
+        with_tree("listcap", &["a.txt", "b.txt", "sub/c.txt"], |root| {
+            let out = collect_files(root, &opts(8), 2);
+            assert_eq!(out.files, vec!["a.txt", "b.txt"]);
+            assert!(out.truncated);
         });
     }
 

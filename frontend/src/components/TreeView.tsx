@@ -32,7 +32,7 @@ const getFileIconStyle = (iconType?: string): React.CSSProperties => {
 
 
 export function TreeView({ nodes, panelId, level = 0, path = [], realParent = [] }: TreeViewProps) {
-  const { state, setSelectedFile, toggleNodeCollapse, openContextMenu } = useAppContext();
+  const { state, setSelection, toggleNodeCollapse, openContextMenu } = useAppContext();
 
   const panel = state.panels.find(p => p.id === panelId);
   const gitFiles = panel?.gitFiles || [];  
@@ -77,7 +77,7 @@ export function TreeView({ nodes, panelId, level = 0, path = [], realParent = []
         const realPath = realSegmentsOf(realParent, node);
         const pathStr = realPath.join('/');
         const isFolder = node.type === 'folder';
-        const isSelected = state.selectedFile === pathStr;
+        const isSelected = state.selection?.panelId === panelId && state.selection.path === pathStr;
         const gitStatus = node.type === 'file' ? getGitStatus(pathStr) : null;
         const gitColor = getGitColor(gitStatus);
 
@@ -85,13 +85,11 @@ export function TreeView({ nodes, panelId, level = 0, path = [], realParent = []
           <div key={node.name} className="tree-node">
             <div
               className={`tree-item ${isSelected ? 'sel' : ''}`}
+              data-selected={isSelected || undefined}
               style={{ paddingLeft: `${10 + level * 14}px` }}
               onClick={() => {
-                if (node.type === 'folder') {
-                  toggleNodeCollapse(panelId, currentPath, realPath);
-                } else {
-                  setSelectedFile(pathStr);
-                }
+                setSelection({ panelId, path: pathStr, namePath: currentPath, isFolder });
+                if (isFolder) toggleNodeCollapse(panelId, currentPath, realPath);
               }}
               onContextMenu={(e) => handleRightClick(e, pathStr, isFolder)}
               onMouseEnter={(e) => handleMouseEnter(e, pathStr, isFolder)}
