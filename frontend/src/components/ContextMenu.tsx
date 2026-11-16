@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
-import { useAppContext, type TreeNode } from '../contexts/AppContext';
-import { openInVSCode, openTerminal, openInExplorer, copyToClipboard } from '../services/tauri';
+import { useAppContext } from '../contexts/AppContext';
+import { openInVSCode, openTerminal, openInExplorer, revealInExplorer, copyToClipboard } from '../services/tauri';
+import { resolveTreePath, parentDir, fileManagerName } from '../services/paths';
 import {
   TbBrandVscode,
   TbTerminal,
@@ -35,44 +36,14 @@ export function ContextMenu() {
 
   if (!state.contextMenu) return null;
 
-  const { x, y, targetPath, panelPath } = state.contextMenu;
+  const { x, y, targetPath, panelPath, isFolder } = state.contextMenu;
 
   // Resolve absolute path if panelPath exists (for Tauri)
   // If no panelPath (browser mock), just use targetPath
-  const fullPath = (() => {
-      if (!panelPath) return targetPath;
-      const parts = targetPath.replace(/\//g, '\\').split('\\');
-      const withoutRoot = parts.slice(1).join('\\');
-      return withoutRoot ? `${panelPath}\\${withoutRoot}` : panelPath;
-  })();
+  const fullPath = panelPath ? resolveTreePath(panelPath, targetPath) : targetPath;
 
-  const targetNode = (() => {
-    if (!panelPath) return null;
-    const panel = state.panels.find(p => p.path === panelPath);
-    if (!panel || !state.treeData[panel.id]) return null;
-    
-    const findNode = (nodes: TreeNode[], pathParts: string[]): TreeNode | null => {
-      if (pathParts.length === 0) return null;
-      const node = nodes.find(n => n.name === pathParts[0]);
-      if (!node) return null;
-      if (pathParts.length === 1) return node;
-      if (node.children) return findNode(node.children, pathParts.slice(1));
-      return null;
-    };
-    
-    const pathParts = targetPath.split('/');
-    return findNode(state.treeData[panel.id], pathParts);
-  })();
-
-  const isFolder = targetNode?.type === 'folder';
-
-  const terminalPath = isFolder ? fullPath : (
-    fullPath.includes('\\') 
-      ? fullPath.substring(0, fullPath.lastIndexOf('\\')) 
-      : fullPath
-  );
-
-  const explorerPath = terminalPath;
+  // Terminal / file manager open the folder itself, or the file's containing folder
+  const folderPath = isFolder ? fullPath : parentDir(fullPath);
 
   const wrapAction = (action: (p: string) => Promise<void>) => () => {
   action(fullPath).catch(err => console.error(err));
@@ -93,16 +64,16 @@ export function ContextMenu() {
           <TbBrandVscode /> open in VSCode <span className="ctx-sh">↵</span>
         </div>
         <div className="ctx-item" onClick={() => { 
-          openTerminal(terminalPath).catch(console.error); 
-          closeContextMenu(); 
+          openTerminal(folderPath).catch(console.error);
+          closeContextMenu();
         }}>
         <TbTerminal /> open terminal here
         </div>
-        <div className="ctx-item" onClick={() => { 
-          openInExplorer(explorerPath).catch(console.error); 
-          closeContextMenu(); 
+        <div className="ctx-item" onClick={() => {
+          openInExplorer(folderPath).catch(console.error);
+          closeContextMenu();
           }}>
-          <TbFolderOpen /> open in Explorer
+          <TbFolderOpen /> open in {fileManagerName}
         </div>
         
         <div className="ctx-sep" />
@@ -111,10 +82,10 @@ export function ContextMenu() {
           <TbCopy /> copy path <span className="ctx-sh">ctrl+c</span>
         </div>
         <div className="ctx-item" onClick={() => { 
-          openInExplorer(fullPath).catch(console.error); 
-          closeContextMenu(); 
+          revealInExplorer(fullPath).catch(console.error);
+          closeContextMenu();
           }}>
-          <TbExternalLink /> reveal in Explorer
+          <TbExternalLink /> reveal in {fileManagerName}
         </div>
       </div>
     </div>

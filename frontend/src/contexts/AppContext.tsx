@@ -4,6 +4,13 @@ import { pickFolder, readDirectory, isTauri, getGitInfo, watchDirectory, unwatch
 import {listen} from "@tauri-apps/api/event";
 
 const STORAGE_KEY = 'canopy_panels';
+const LAYOUT_KEY = 'canopy_layout';
+
+export type Layout = 'grid' | 'row';
+
+function loadLayout(): Layout {
+  try { return localStorage.getItem(LAYOUT_KEY) === 'row' ? 'row' : 'grid'; } catch { return 'grid'; }
+}
 
 function savePanels(panels: PanelItem[]) {
   const paths = panels.map(p => p.path).filter(Boolean);
@@ -45,6 +52,7 @@ export type ContextMenuState = {
   y: number;
   targetPath: string;
   panelPath?: string; // the root path of the panel (for resolving full filesystem path)
+  isFolder?: boolean;
 } | null;
 
 export type AppState = {
@@ -55,6 +63,7 @@ export type AppState = {
   commandPaletteOpen: boolean;
   contextMenu: ContextMenuState;
   treeData: Record<string, TreeNode[]>;
+  layout: Layout;
 };
 
 type AppContextType = {
@@ -64,9 +73,10 @@ type AppContextType = {
   addPanel: () => void;
   setSelectedFile: (path: string | null) => void;
   toggleCommandPalette: () => void;
-  openContextMenu: (x: number, y: number, targetPath: string, panelPath?: string) => void;
+  openContextMenu: (x: number, y: number, targetPath: string, panelPath?: string, isFolder?: boolean) => void;
   closeContextMenu: () => void;
   toggleNodeCollapse: (panelId: string, path: string[]) => void;
+  toggleLayout: () => void;
 };
 
 // ─── Mock data (used when running in browser without Tauri) ─────────
@@ -189,40 +199,46 @@ export function AppProvider({ children }: { children: ReactNode }) {
     commandPaletteOpen: false,
     contextMenu: null,
     treeData: isTauri ? {} : mockTreeData,
+    layout: loadLayout(),
   });
   
+  // Restore saved panels, in their saved order. Folders that no longer exist are skipped.
   useEffect(() => {
     if (!isTauri) return;
-    const paths = loadSavedPaths();
-    paths.forEach(async (folderPath) => {
-      const folderName = folderPath.split(/[/\\]/).filter(Boolean).pop() || folderPath;
-      const id = Date.now().toString() + Math.random();
-      try {
-        const rawTree = await readDirectory(folderPath);
-        const tree = addCollapseState(rawTree);
-        const rootNode: TreeNode = { name: folderName, type: 'folder', collapsed: false, children: tree };
-        const badge = detectBadge(rawTree);
-        const gitInfo = await getGitInfo(folderPath);
-        
-        setState(prev => ({
-          ...prev,
-          panels: [...prev.panels, { 
-            id, 
-            title: folderName, 
-            badge, 
+    const restore = async () => {
+      const results = await Promise.all(loadSavedPaths().map(async (folderPath, i) => {
+        const folderName = folderPath.split(/[/\\]/).filter(Boolean).pop() || folderPath;
+        const id = `${Date.now()}-${i}`;
+        try {
+          const rawTree = await readDirectory(folderPath);
+          const rootNode: TreeNode = { name: folderName, type: 'folder', collapsed: false, children: addCollapseState(rawTree) };
+          const gitInfo = await getGitInfo(folderPath);
+          const panel: PanelItem = {
+            id,
+            title: folderName,
+            badge: detectBadge(rawTree),
             path: folderPath,
             gitBranch: gitInfo?.branch,
             gitDirty: gitInfo?.is_dirty,
             gitFiles: gitInfo?.files || [],
-        }],
-          treeData: { ...prev.treeData, [id]: [rootNode] },
-        }));
+          };
+          return { panel, rootNode };
+        } catch (err) {
+          console.error('Failed to restore panel:', folderPath, err);
+          return null;
+        }
+      }));
 
-        watchDirectory(id, folderPath).catch(console.error);
-      } catch (err) {
-        console.error('Failed to restore panel:', err);
-      }
-    });
+      const restored = results.filter((r): r is NonNullable<typeof r> => r !== null);
+      setState(prev => ({
+        ...prev,
+        panels: [...prev.panels, ...restored.map(r => r.panel)],
+        treeData: { ...prev.treeData, ...Object.fromEntries(restored.map(r => [r.panel.id, [r.rootNode]])) },
+        activePanelId: prev.activePanelId || restored[0]?.panel.id || "",
+      }));
+      restored.forEach(r => watchDirectory(r.panel.id, r.panel.path!).catch(console.error));
+    };
+    restore();
   }, []);
 
   // 2. PENTRU WATCHER (Ca să știm path-ul în timp real)
@@ -232,7 +248,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // 3. FILE WATCHER LISTENER (Ascultă evenimentele de la Rust)
   useEffect(() => {
     if (!isTauri) return;
-    let debounceTimers: Record<string, number> = {};
+    const debounceTimers: Record<string, number> = {};
 
     const setupListener = async () => {
       const unlisten = await listen<string>('file_changed', (event) => {
@@ -294,9 +310,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setState(prev => {
       const updated = prev.panels.filter(p => p.id !== id);
       savePanels(updated);
-      return { ...prev, panels: updated };
-  });
-};
+      const treeData = { ...prev.treeData };
+      delete treeData[id];
+      return {
+        ...prev,
+        panels: updated,
+        treeData,
+        activePanelId: prev.activePanelId === id ? (updated[0]?.id ?? "") : prev.activePanelId,
+      };
+    });
+  };
 
 
   const addPanel = async () => {
@@ -351,14 +374,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const toggleLayout = () =>
+    setState(prev => {
+      const layout: Layout = prev.layout === 'grid' ? 'row' : 'grid';
+      try { localStorage.setItem(LAYOUT_KEY, layout); } catch { /* ignore */ }
+      return { ...prev, layout };
+    });
+
   const setSelectedFile = (path: string | null) =>
     setState(prev => ({ ...prev, selectedFile: path }));
 
   const toggleCommandPalette = () =>
     setState(prev => ({ ...prev, commandPaletteOpen: !prev.commandPaletteOpen }));
 
-  const openContextMenu = (x: number, y: number, targetPath: string, panelPath?: string) =>
-    setState(prev => ({ ...prev, contextMenu: { x, y, targetPath, panelPath } }));
+  const openContextMenu = (x: number, y: number, targetPath: string, panelPath?: string, isFolder?: boolean) =>
+    setState(prev => ({ ...prev, contextMenu: { x, y, targetPath, panelPath, isFolder } }));
 
   const closeContextMenu = () =>
     setState(prev => ({ ...prev, contextMenu: null }));
@@ -395,13 +425,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
     <AppContext.Provider value={{
       state, setActivePanelId, removePanel, addPanel,
       setSelectedFile, toggleCommandPalette, openContextMenu, closeContextMenu,
-      toggleNodeCollapse
+      toggleNodeCollapse, toggleLayout
     }}>
       {children}
     </AppContext.Provider>
   );
 }
 
+// Hook lives next to its provider on purpose; only affects HMR granularity.
+// eslint-disable-next-line react-refresh/only-export-components
 export function useAppContext() {
   const context = useContext(AppContext);
   if (!context) {

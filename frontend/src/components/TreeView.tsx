@@ -14,6 +14,7 @@ type TreeViewProps = {
   panelId: string;
   level?: number;
   path?: string[];
+  realParent?: string[];
 };
 
 // Map file extensions/iconType to a color accent
@@ -28,40 +29,28 @@ const getFileIconStyle = (iconType?: string): React.CSSProperties => {
 
 
 
-export function TreeView({ nodes, panelId, level = 0, path = [] }: TreeViewProps) {
+export function TreeView({ nodes, panelId, level = 0, path = [], realParent = [] }: TreeViewProps) {
   const { state, setSelectedFile, toggleNodeCollapse, openContextMenu } = useAppContext();
 
   const panel = state.panels.find(p => p.id === panelId);
   const gitFiles = panel?.gitFiles || [];  
 
+  // `nodePath` is "<root>/<rel/path>"; git paths are relative to the repo root,
+  // which is the panel root (get_git_info only runs when .git is in the panel root).
   const getGitStatus = (nodePath: string): string | null => {
-    const treeSegments = nodePath.split('/');
-    if (treeSegments.length < 2) return null;
-    
-    const fileInfo = gitFiles.find(f => {
-      const gitSegments = f.path.split('/');
-      
-      // Compară ultimele N segmente (maxim 3, minim 1)
-      const compareLength = Math.min(treeSegments.length - 1, gitSegments.length, 3);
-      
-      const treeEnd = treeSegments.slice(-compareLength).join('/');
-      const gitEnd = gitSegments.slice(-compareLength).join('/');
-      
-      return treeEnd === gitEnd;
-    });
-    
-    return fileInfo?.status || null;
-  };
-  const handleRightClick = (e: React.MouseEvent, nodePath: string) => {
-    e.preventDefault();
-    const panel = state.panels.find(p => p.id === panelId);
-    openContextMenu(e.clientX, e.clientY, nodePath, panel?.path);
+    const rel = nodePath.split('/').slice(1).join('/');
+    if (!rel) return null;
+    return gitFiles.find(f => f.path.replace(/\\/g, '/') === rel)?.status || null;
   };
 
-  const handleMouseEnter = (e: React.MouseEvent, nodePath: string) => {
+  const handleRightClick = (e: React.MouseEvent, nodePath: string, isFolder: boolean) => {
+    e.preventDefault();
+    openContextMenu(e.clientX, e.clientY, nodePath, panel?.path, isFolder);
+  };
+
+  const handleMouseEnter = (e: React.MouseEvent, nodePath: string, isFolder: boolean) => {
     if (e.ctrlKey) {
-      const panel = state.panels.find(p => p.id === panelId);
-      openContextMenu(e.clientX, e.clientY, nodePath, panel?.path);
+      openContextMenu(e.clientX, e.clientY, nodePath, panel?.path, isFolder);
     }
   };
 
@@ -79,8 +68,15 @@ export function TreeView({ nodes, panelId, level = 0, path = [] }: TreeViewProps
   return (
     <div className="tree-children">
       {nodes.map((node) => {
+        // `currentPath` = node names, used to find the node in the tree (collapse toggling).
+        // `realPath` = actual filesystem segments: compacted folders ("models / bert")
+        // hide intermediate directories in `compactPath`, which must be included.
         const currentPath = [...path, node.name];
-        const pathStr = currentPath.join('/');
+        const compactSegments = (node.compactPath ?? '')
+          .split('/').map(s => s.trim()).filter(Boolean);
+        const realPath = [...realParent, ...compactSegments, node.name];
+        const pathStr = realPath.join('/');
+        const isFolder = node.type === 'folder';
         const isSelected = state.selectedFile === pathStr;
         const gitStatus = node.type === 'file' ? getGitStatus(pathStr) : null;
         const gitColor = getGitColor(gitStatus);
@@ -97,8 +93,8 @@ export function TreeView({ nodes, panelId, level = 0, path = [] }: TreeViewProps
                   setSelectedFile(pathStr);
                 }
               }}
-              onContextMenu={(e) => handleRightClick(e, pathStr)}
-              onMouseEnter={(e) => handleMouseEnter(e, pathStr)}
+              onContextMenu={(e) => handleRightClick(e, pathStr, isFolder)}
+              onMouseEnter={(e) => handleMouseEnter(e, pathStr, isFolder)}
             >
               {node.type === 'folder' ? (
                 <>
@@ -132,6 +128,7 @@ export function TreeView({ nodes, panelId, level = 0, path = [] }: TreeViewProps
                 panelId={panelId}
                 level={level + 1}
                 path={currentPath}
+                realParent={realPath}
               />
             )}
           </div>

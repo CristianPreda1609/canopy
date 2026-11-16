@@ -10,7 +10,7 @@ export function Panels({ items }: PanelsProps) {
   const { state, setActivePanelId, addPanel } = useAppContext();
   
   return (
-    <div className="panels">
+    <div className={`panels ${state.layout === 'row' ? 'panels-row' : ''}`}>
       {items.map((panel) => (
         <div 
           key={panel.id} 
