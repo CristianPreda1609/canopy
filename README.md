@@ -114,7 +114,8 @@ canopy/
 │   ├── ci.yml                   # Lint, test, build, clippy on Windows/macOS/Linux
 │   └── release.yml              # Tag v* → installers for all platforms
 ├── ARCHITECTURE.md              # In-depth technical documentation (Romanian)
-├── LICENSE                      # Apache 2.0
+├── LICENSE-APACHE               # Apache License 2.0
+├── LICENSE-MIT                  # MIT License
 └── README.md
 ```
 
@@ -403,4 +404,11 @@ A strict **Content Security Policy** is also set in `tauri.conf.json`. It allows
 
 ## License
 
-Distributed under the **Apache License 2.0**. See [`LICENSE`](./LICENSE) for details.
+Canopy is dual-licensed under either of
+
+- **Apache License, Version 2.0** ([`LICENSE-APACHE`](./LICENSE-APACHE))
+- **MIT License** ([`LICENSE-MIT`](./LICENSE-MIT))
+
+at your option.
+
+Unless you explicitly state otherwise, any contribution you intentionally submit for inclusion in this project, as defined in the Apache-2.0 license, is dual-licensed as above, without any additional terms or conditions.
