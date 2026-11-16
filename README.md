@@ -52,6 +52,7 @@ Canopy is built with **[Tauri 2](https://tauri.app/)**, so it uses a native Rust
 - 🖥️ **Cross-platform**: Windows, macOS and Linux, each using its native terminal and file manager.
 - 🧱 **Two layouts**: a wrapping grid, or a single scrollable row of panels (remembered between launches).
 - 🎛️ **Command palette** (`Ctrl+Shift+P`) with fuzzy filtering and keyboard navigation.
+- ⬆️ **Auto-updates**: Canopy checks GitHub Releases on startup and updates itself in one click. Updates are cryptographically signed.
 - 💾 **Persistent workspace**: the panels you open are remembered between launches.
 - 🪟 **Frameless, transparent window** with a custom title bar and a glassmorphism UI.
 - 🧪 **Browser fallback**: the frontend also runs in a regular browser (`npm run dev`), with mocked native calls for UI work.
@@ -227,6 +228,24 @@ cd src-tauri; cargo clippy --all-targets -- -D warnings
 | `npm run lint`    | Run ESLint                          |
 | `npm test`        | Run unit tests                      |
 | `npm run preview` | Preview the production build        |
+
+### Auto-updates
+
+Canopy uses Tauri's official [updater plugin](https://v2.tauri.app/plugin/updater/):
+
+1. About 5 seconds after startup, the app fetches `releases/latest/download/latest.json` from this repo. You can also run **Check for updates** from the command palette.
+2. If a newer version exists, an **"update to vX.Y.Z"** pill appears in the status bar. Clicking it downloads the update, checks its signature against the public key in `tauri.conf.json`, installs it and restarts.
+3. Release builds are signed with a private key that lives only in the `TAURI_SIGNING_PRIVATE_KEY` repository secret. Without that secret, releases still build, just without update files.
+
+**One-time setup (maintainer):**
+
+1. The key pair was generated with `cargo tauri signer generate -w ~/.tauri/canopy.key`. **Back up `~/.tauri/canopy.key`.** If it's lost, existing installs can't verify future updates.
+2. On GitHub, go to **Settings → Secrets and variables → Actions → New repository secret**:
+   - `TAURI_SIGNING_PRIVATE_KEY`: the full contents of `~/.tauri/canopy.key`
+   - `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`: optional (the current key has no password)
+3. Publish releases. Drafts and pre-releases are invisible to `releases/latest`, so the updater only sees **published** releases.
+
+To release a new version, bump `version` in `src-tauri/tauri.conf.json` (and `Cargo.toml`), then tag it and push the tag.
 
 ### Changing the app icon
 
@@ -428,7 +447,7 @@ A strict **Content Security Policy** is also set in `tauri.conf.json`. It allows
 - [x] Settings panel (scan depth, hidden files, skipped folders)
 - [x] Lazy loading of deep and skipped folders
 - [x] Keyboard shortcuts, tree navigation and Go to file (`Ctrl+P`)
-- [ ] Auto-updater
+- [x] Signed auto-updates via GitHub Releases
 - [ ] Sign and notarize the macOS builds.
 
 ---

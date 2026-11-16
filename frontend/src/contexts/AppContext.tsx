@@ -1,7 +1,8 @@
 import { createContext, useState, useContext, useEffect, useRef } from "react";
 import type { ReactNode } from "react";
 import {
-  pickFolder, readDirectory, isTauri, getGitInfo, watchDirectory, unwatchDirectory, type ScanOptions,
+  pickFolder, readDirectory, isTauri, getGitInfo, watchDirectory, unwatchDirectory, checkForUpdate,
+  type ScanOptions, type AvailableUpdate,
 } from "../services/tauri";
 import { resolveTreePath } from "../services/paths";
 import { listen } from "@tauri-apps/api/event";
@@ -65,6 +66,15 @@ export type Selection = {
   isFolder: boolean;
 } | null;
 
+/** Auto-update status shown in the status bar. */
+export type UpdateState =
+  | { status: 'idle' }
+  | { status: 'checking' }
+  | { status: 'up-to-date' }
+  | { status: 'available'; version: string }
+  | { status: 'installing'; version: string; progress: number | null }
+  | { status: 'error'; message: string };
+
 export type AppState = {
   panels: PanelItem[];
   activePanelId: string;
@@ -77,6 +87,7 @@ export type AppState = {
   treeData: Record<string, TreeNode[]>;
   layout: Layout;
   settings: Settings;
+  update: UpdateState;
 };
 
 type AppContextType = {
@@ -98,6 +109,9 @@ type AppContextType = {
   /** `namePath` locates the node; `realPath` is its real filesystem path (for lazy loading). */
   toggleNodeCollapse: (panelId: string, namePath: string[], realPath: string[]) => void;
   toggleLayout: () => void;
+  /** `manual`: report "up to date" / errors in the status bar (startup checks stay quiet). */
+  checkUpdates: (manual: boolean) => void;
+  installUpdate: () => void;
 };
 
 // ─── Mock data (used when running in browser without Tauri) ─────────
@@ -192,6 +206,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     treeData: isTauri ? {} : mockTreeData,
     layout: loadLayout(),
     settings: loadSettings(),
+    update: { status: 'idle' },
   });
 
   // Refs so async callbacks (watcher events, lazy loads) see current values
@@ -310,6 +325,61 @@ export function AppProvider({ children }: { children: ReactNode }) {
       unlisten?.();
       Object.values(debounceTimers).forEach(clearTimeout);
     };
+  }, []);
+
+  // ─── Auto-update ──────────────────────────────────────────────────
+  const pendingUpdate = useRef<AvailableUpdate | null>(null);
+  const setUpdate = (update: UpdateState) => setState(prev => ({ ...prev, update }));
+  const clearUpdateStatusLater = (status: UpdateState['status']) =>
+    setTimeout(() => setState(prev => prev.update.status === status ? { ...prev, update: { status: 'idle' } } : prev), 4000);
+
+  const checkUpdates = async (manual: boolean) => {
+    if (!isTauri) {
+      if (manual) { setUpdate({ status: 'up-to-date' }); clearUpdateStatusLater('up-to-date'); }
+      return;
+    }
+    if (manual) setUpdate({ status: 'checking' });
+    try {
+      const update = await checkForUpdate();
+      pendingUpdate.current = update;
+      if (update) {
+        setUpdate({ status: 'available', version: update.version });
+      } else if (manual) {
+        setUpdate({ status: 'up-to-date' });
+        clearUpdateStatusLater('up-to-date');
+      }
+    } catch (err) {
+      // Normal before the first signed release exists, or when offline
+      console.warn('Update check failed:', err);
+      if (manual) {
+        setUpdate({ status: 'error', message: 'Update check failed' });
+        clearUpdateStatusLater('error');
+      }
+    }
+  };
+
+  const installUpdate = async () => {
+    const update = pendingUpdate.current;
+    if (!update) return;
+    setUpdate({ status: 'installing', version: update.version, progress: null });
+    try {
+      await update.install(progress =>
+        setUpdate({ status: 'installing', version: update.version, progress }));
+      // relaunch() restarts the app; nothing runs after this on success
+    } catch (err) {
+      console.error('Update install failed:', err);
+      setUpdate({ status: 'error', message: 'Update failed' });
+      clearUpdateStatusLater('error');
+    }
+  };
+
+  // Quiet check shortly after startup, so it doesn't compete with panel loading
+  const checkUpdatesRef = useRef(checkUpdates);
+  useEffect(() => { checkUpdatesRef.current = checkUpdates; });
+  useEffect(() => {
+    if (!isTauri) return;
+    const t = setTimeout(() => checkUpdatesRef.current(false), 5000);
+    return () => clearTimeout(t);
   }, []);
 
   const setActivePanelId = (id: string) =>
@@ -454,6 +524,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setSelection, toggleCommandPalette, toggleSettings, toggleQuickOpen, updateSettings,
       focusPanel, cyclePanel,
       openContextMenu, closeContextMenu, toggleNodeCollapse, toggleLayout,
+      checkUpdates, installUpdate,
     }}>
       {children}
     </AppContext.Provider>

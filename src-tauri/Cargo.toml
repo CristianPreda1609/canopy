@@ -1,5 +1,5 @@
 [package]
-name = "app"
+name = "canopy"
 version = "0.1.0"
 description = "Canopy: a multi-panel project tree viewer for Windows"
 authors = ["CristianPreda1609"]
@@ -26,3 +26,7 @@ tauri-plugin-log = "2"
 tauri-plugin-dialog = "2"
 arboard = "3"
 notify = "8.2.0"
+
+[target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
+tauri-plugin-process = "2"
+tauri-plugin-updater = "2"

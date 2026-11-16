@@ -60,9 +60,24 @@ jobs:
         with:
           workspaces: src-tauri
 
+      # Updates are signed with TAURI_SIGNING_PRIVATE_KEY. Without that secret
+      # the release still builds, just without auto-update files (latest.json).
+      - name: Updater signing
+        id: updater
+        shell: bash
+        env:
+          KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+        run: |
+          if [ -z "$KEY" ]; then
+            echo "::warning::TAURI_SIGNING_PRIVATE_KEY is not set; building without auto-update artifacts"
+            echo "args=--config '{\"bundle\":{\"createUpdaterArtifacts\":false}}'" >> "$GITHUB_OUTPUT"
+          fi
+
       - uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           tauriScript: npx --yes @tauri-apps/cli@2
           tagName: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
@@ -70,4 +85,5 @@ jobs:
           releaseBody: 'See the assets below to download Canopy for your platform.'
           releaseDraft: true
           prerelease: false
-          args: ${{ matrix.args }}
+          args: ${{ matrix.args }} ${{ steps.updater.outputs.args }}
+          includeUpdaterJson: true

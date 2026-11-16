@@ -15,6 +15,8 @@ import {
   TbFileSearch,
   TbCopy,
   TbSquareX,
+  TbDownload,
+  TbRefresh,
 } from 'react-icons/tb';
 
 type CommandItem = {
@@ -29,6 +31,7 @@ type CommandItem = {
 export function CommandPalette() {
   const {
     state, toggleCommandPalette, addPanel, toggleLayout, toggleSettings, toggleQuickOpen, removePanel,
+    checkUpdates, installUpdate,
   } = useAppContext();
   const [search, setSearch] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -54,6 +57,9 @@ export function CommandPalette() {
     { id: 'toggle-layout', label: 'Toggle layout', icon: <TbLayoutColumns />, action: toggleLayout, shortcut: 'toggleLayout' },
     { id: 'close-panel', label: 'Close panel', icon: <TbSquareX />, action: () => { if (panel) removePanel(panel.id); }, shortcut: 'closePanel' },
     { id: 'settings', label: 'Settings', icon: <TbSettings />, action: toggleSettings, shortcut: 'settings' },
+    state.update.status === 'available'
+      ? { id: 'install-update', label: `Install update v${state.update.version} and restart`, icon: <TbDownload />, action: installUpdate }
+      : { id: 'check-updates', label: 'Check for updates', icon: <TbRefresh />, action: () => checkUpdates(true) },
   ];
 
   const filteredCommands = search.trim()

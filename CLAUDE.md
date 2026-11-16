@@ -44,10 +44,17 @@ Before finishing a change, run what CI runs for whatever you touched: `npm run l
 - The Rust toolchain is pinned in `src-tauri/rust-toolchain.toml` (CI uses the same file). To upgrade, bump it, then fix any new Clippy lints before pushing.
 - `macOSPrivateApi` is on (Cargo feature `macos-private-api`) for the transparent window. Keep both in sync.
 
+## Releases & updates
+
+- Version lives in `src-tauri/tauri.conf.json` (`version`) and `src-tauri/Cargo.toml`; keep them equal. Tag `vX.Y.Z` → `release.yml` builds a **draft** release; it must be published for the updater to see it.
+- Updater public key is in `tauri.conf.json` → `plugins.updater.pubkey`. The private key is `~/.tauri/canopy.key` on the maintainer machine + the `TAURI_SIGNING_PRIVATE_KEY` repo secret. Never commit it, never regenerate it casually (existing installs would stop accepting updates).
+- Update checks/installs go through `checkForUpdate()` in `services/tauri.ts`; UI state is `state.update` in AppContext.
+
 ## Never commit
 
 - Code dumps or snapshots (`CODE_DUMP*.md`, `dump_code.*`). These were already scrubbed from history once, and `.gitignore` blocks them.
 - `node_modules/`, `dist/`, `src-tauri/target/`, `src-tauri/gen/schemas`.
+- Signing keys (`*.key`). The updater private key lives in `~/.tauri/`, outside the repo.
 
 ## Known issues / TODO
 

@@ -124,3 +124,39 @@ export async function listFiles(path: string, opts: Omit<ScanOptions, 'depth'> =
     skipDirs: opts.skipDirs ?? undefined,
   });
 }
+
+export type AvailableUpdate = {
+  version: string;
+  notes?: string;
+  /** Download, install, and relaunch the app. */
+  install: (onProgress?: (fraction: number | null) => void) => Promise<void>;
+};
+
+/**
+ * Ask GitHub Releases (plugins.updater.endpoints) for a newer, signed version.
+ * Resolves to null when up to date. Rejects on network errors or when no
+ * release with update metadata exists yet.
+ */
+export async function checkForUpdate(): Promise<AvailableUpdate | null> {
+  if (!isTauri) return null;
+  const { check } = await import('@tauri-apps/plugin-updater');
+  const update = await check();
+  if (!update) return null;
+  return {
+    version: update.version,
+    notes: update.body,
+    install: async (onProgress) => {
+      let total = 0;
+      let done = 0;
+      await update.downloadAndInstall(event => {
+        if (event.event === 'Started') total = event.data.contentLength ?? 0;
+        if (event.event === 'Progress') {
+          done += event.data.chunkLength;
+          onProgress?.(total ? done / total : null);
+        }
+      });
+      const { relaunch } = await import('@tauri-apps/plugin-process');
+      await relaunch();
+    },
+  };
+}
