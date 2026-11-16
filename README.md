@@ -50,7 +50,7 @@ Canopy is built with **[Tauri 2](https://tauri.app/)**, so it uses a native Rust
 - 🌿 **Git integration**: shows the current branch and whether there are uncommitted changes, and colors each file by its git status.
 - ⚡ **Quick actions**: open a file or folder in **VS Code**, a **terminal**, or the system **file manager** (Explorer / Finder / your Linux default), reveal it there, or copy its path.
 - 🖥️ **Cross-platform**: Windows, macOS and Linux, each using its native terminal and file manager.
-- 🧱 **Two layouts**: a wrapping grid, or a single scrollable row of panels (remembered between launches).
+- 🪟 **Tiling workspaces** *(experimental branch)*: Hyprland-style dwindle tiling, keyboard focus/swap/resize, fullscreen, and workspaces 1–9.
 - 🎛️ **Command palette** (`Ctrl+Shift+P`) with fuzzy filtering and keyboard navigation.
 - ⬆️ **Auto-updates**: Canopy checks GitHub Releases on startup and updates itself in one click. Updates are cryptographically signed.
 - 💾 **Persistent workspace**: the panels you open are remembered between launches.
@@ -280,10 +280,24 @@ Canopy can be used entirely from the keyboard. On macOS, use `⌘` instead of `C
 | `Ctrl+,` | Settings |
 | `Ctrl+O` | Open a folder in a new panel |
 | `Ctrl+W` | Close the active panel |
-| `Ctrl+\` | Toggle grid / row layout |
+| `Ctrl+\` | Toggle split direction of the focused panel |
 | `Ctrl+1` … `Ctrl+9` | Jump to panel 1–9 |
 | `Ctrl+Tab` / `Ctrl+Shift+Tab` | Next / previous panel |
 | `Esc` | Close the palette, dialog or context menu |
+
+**Tiling** *(experimental: `experimental/tiling` branch)*
+
+| Shortcut | Action |
+|----------|--------|
+| `Alt+H/J/K/L` or `Alt+Arrows` | Focus the panel left / down / up / right |
+| `Alt+Shift+H/J/K/L` or `Alt+Shift+Arrows` | Swap with that panel |
+| `Alt+Ctrl+Arrows` | Resize (move the nearest divider) |
+| `Alt+F` | Fullscreen the focused panel |
+| `Alt+E` (or `Ctrl+\`) | Toggle split direction |
+| `Alt+1` … `Alt+9` | Switch workspace |
+| `Alt+Shift+1` … `Alt+Shift+9` | Send the focused panel to a workspace |
+
+New panels split the focused panel (wider panels split side by side, taller ones split top/bottom). You can also drag the dividers. Layouts and workspaces are saved per folder and restored on launch. `Ctrl+1…9` and `Ctrl+Tab` work within the current workspace. On macOS, `Alt` is `Option`, and keys are matched by physical position, so `Option+H` works even though it types `˙`.
 
 **File tree** (active panel)
 
@@ -310,7 +324,8 @@ Canopy can be used entirely from the keyboard. On macOS, use `⌘` instead of `C
 | Open terminal here     | Open a terminal at the location                  |
 | Open in Explorer / Finder / file manager | Open the containing folder  |
 | Reveal in Explorer / Finder / file manager | Show the item selected in its folder |
-| Toggle layout          | Switch between grid and row layout (also the title bar button) |
+| Toggle split direction | Flip the focused split horizontal ↔ vertical (also the title bar button) |
+| Fullscreen panel       | Show only the focused panel (`Alt+F`) |
 | Settings               | Open the settings dialog (also the ⚙ title bar button) |
 
 ### Context Menu

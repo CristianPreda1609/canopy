@@ -62,6 +62,12 @@ Before finishing a change, run what CI runs for whatever you touched: `npm run l
 - macOS release builds are unsigned.
 - The demo panels in `AppContext.tsx` are intentional: they only show in browser-only mode (`!isTauri`).
 
+## Tiling (experimental/tiling branch)
+
+- Layout math is pure and tested: `src/tiling/layout.ts` (split tree: insert/remove/neighbor/swap/resize/serialize) and `src/tiling/workspaces.ts` (workspaces 1–9). Keep React out of them.
+- State: `state.workspaces` in AppContext; the active panel is a leaf of `activeLayout(workspaces)`. Persisted by folder path in localStorage `canopy_workspaces`.
+- Alt shortcuts must use `pressedKey(e)` (physical key via `e.code`) because macOS Option changes `e.key`.
+
 ## Path conventions (frontend)
 
 - **Shortcuts:** add new ones to `KEYMAP` in `src/keymap.ts` (it drives the handler in `hooks/useShortcuts.ts` and the palette hints), then document them in the README. Use `Mod`, never a raw `Ctrl`, so macOS gets `⌘`. Tree keys only fire when no overlay is open and focus isn't in an input.

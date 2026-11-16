@@ -19,7 +19,7 @@ function App() {
         <div className="sunset-orb2" />
         <div className="app">
           <TitleBar />
-          <Panels items={state.panels} />
+          <Panels />
           <StatusBar 
             infopans={`${state.panels.length} panels`} 
             folder_files={state.selection?.path || "Nothing selected"} 

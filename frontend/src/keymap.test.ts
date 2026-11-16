@@ -3,8 +3,10 @@ import assert from 'node:assert/strict';
 import { matchesCombo, formatCombo, panelIndexFromEvent, type KeyLike } from './keymap.ts';
 import { fuzzyMatch, fuzzyFilter } from './fuzzy.ts';
 
+const codeFor = (key: string) =>
+  /^[a-z]$/i.test(key) ? `Key${key.toUpperCase()}` : /^[0-9]$/.test(key) ? `Digit${key}` : key;
 const ev = (key: string, mods: Partial<KeyLike> = {}): KeyLike =>
-  ({ key, ctrlKey: false, metaKey: false, shiftKey: false, altKey: false, ...mods });
+  ({ key, code: codeFor(key), ctrlKey: false, metaKey: false, shiftKey: false, altKey: false, ...mods });
 
 test('matchesCombo uses Ctrl on Windows/Linux and Cmd on macOS', () => {
   assert.ok(matchesCombo(ev('p', { ctrlKey: true }), 'Mod+P', false));
@@ -51,4 +53,13 @@ test('fuzzyFilter ranks file-name and word-start matches first', () => {
 
   // camelCase humps count as word starts
   assert.deepEqual(fuzzyMatch('sp', 'SettingsPanel')!.positions, [0, 8]);
+});
+
+test('Alt combos match the physical key (macOS Option produces symbols)', async () => {
+  const { pressedKey } = await import('./keymap.ts');
+  // Option+H on macOS: key is "˙" but code is "KeyH"
+  assert.equal(pressedKey({ ...ev('˙', { altKey: true }), code: 'KeyH' }), 'h');
+  assert.ok(matchesCombo({ ...ev('ƒ', { altKey: true }), code: 'KeyF' }, 'Alt+F', true));
+  assert.equal(pressedKey({ ...ev('#', { altKey: true, shiftKey: true }), code: 'Digit3' }), '3');
+  assert.equal(pressedKey(ev('ArrowLeft', { altKey: true })), 'ArrowLeft');
 });

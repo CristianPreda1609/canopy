@@ -401,3 +401,50 @@ html,body,#root{
 }
 .update-pill:hover { filter: brightness(1.1); }
 @keyframes canopy-pulse { 50% { box-shadow: 0 0 16px rgba(192,64,160,0.5); } }
+
+/* ─── Tiling (Hyprland style) ─────────────────────────────────────── */
+.panels.tile-root { display: flex; padding: 6px; gap: 0; min-height: 0; overflow: hidden; }
+.tile-split { display: flex; flex: 1; min-width: 0; min-height: 0; }
+.tile-split-h { flex-direction: row; }
+.tile-split-v { flex-direction: column; }
+.tile-child { display: flex; flex-basis: 0; min-width: 0; min-height: 0; transition: flex-grow 0.18s ease; }
+.tile-split.dragging > .tile-child { transition: none; }
+.tile-divider { flex: 0 0 6px; position: relative; z-index: 2; }
+.tile-divider-h { cursor: col-resize; }
+.tile-divider-v { cursor: row-resize; }
+.tile-divider::after {
+  content: ''; position: absolute; border-radius: 2px; background: transparent; transition: background 0.15s;
+}
+.tile-divider-h::after { top: 20%; bottom: 20%; left: 2px; width: 2px; }
+.tile-divider-v::after { left: 20%; right: 20%; top: 2px; height: 2px; }
+.tile-divider:hover::after, .tile-split.dragging > .tile-divider::after { background: var(--color-accent); }
+
+.tile-panel {
+  flex: 1; min-width: 0; min-height: 0; border: 1px solid var(--color-border) !important;
+  border-radius: 10px; overflow: hidden; background: rgba(255,255,255,0.015);
+  transition: border-color 0.2s, box-shadow 0.2s;
+  animation: tile-in 0.22s cubic-bezier(.2,.8,.2,1);
+}
+.tile-panel.active {
+  border-color: rgba(240,112,48,0.55) !important;
+  box-shadow: 0 0 0 1px rgba(192,64,160,0.25), 0 0 18px rgba(240,112,48,0.12);
+}
+@keyframes tile-in { from { opacity: 0; transform: scale(0.97); } to { opacity: 1; transform: none; } }
+
+.tile-empty { flex: 1; border: 1px dashed var(--color-border) !important; border-radius: 10px; }
+.tile-empty-hint { font-size: 11px; color: var(--color-text-dim); }
+
+/* Workspace indicator */
+.ws-indicator { display: flex; gap: 4px; margin-left: 4px; }
+.ws-dot {
+  min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; cursor: pointer;
+  font-family: var(--font-sans); font-size: 10px; line-height: 16px;
+  color: var(--color-text-muted); background: rgba(255,255,255,0.05); border: 0.5px solid var(--color-border);
+  transition: all 0.2s;
+}
+.ws-dot:hover { color: var(--color-text-main); background: rgba(255,255,255,0.1); }
+.ws-dot.active {
+  min-width: 28px; color: #fff; border-color: transparent;
+  background: linear-gradient(135deg, var(--color-accent), #c040a0);
+}
+.tb-btn.on { color: var(--color-accent-hover); }

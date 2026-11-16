@@ -15,6 +15,7 @@ import {
   TbFileSearch,
   TbCopy,
   TbSquareX,
+  TbMaximize,
   TbDownload,
   TbRefresh,
 } from 'react-icons/tb';
@@ -30,7 +31,8 @@ type CommandItem = {
 
 export function CommandPalette() {
   const {
-    state, toggleCommandPalette, addPanel, toggleLayout, toggleSettings, toggleQuickOpen, removePanel,
+    state, toggleCommandPalette, addPanel, toggleSplitDir, toggleSettings, toggleQuickOpen, removePanel,
+    toggleFullscreen,
     checkUpdates, installUpdate,
   } = useAppContext();
   const [search, setSearch] = useState('');
@@ -54,7 +56,8 @@ export function CommandPalette() {
     { id: 'open-explorer', label: `Open in ${fileManagerName}`, icon: <TbFolderOpen />, action: run(openInExplorer, 'folder') },
     { id: 'reveal-explorer', label: `Reveal in ${fileManagerName}`, icon: <TbExternalLink />, action: run(revealInExplorer, 'full') },
     { id: 'copy-path', label: 'Copy path', icon: <TbCopy />, action: run(copyToClipboard, 'full') },
-    { id: 'toggle-layout', label: 'Toggle layout', icon: <TbLayoutColumns />, action: toggleLayout, shortcut: 'toggleLayout' },
+    { id: 'toggle-split', label: 'Toggle split direction', icon: <TbLayoutColumns />, action: toggleSplitDir, shortcut: 'tileToggleSplit' },
+    { id: 'fullscreen', label: 'Fullscreen panel', icon: <TbMaximize />, action: toggleFullscreen, shortcut: 'tileFullscreen' },
     { id: 'close-panel', label: 'Close panel', icon: <TbSquareX />, action: () => { if (panel) removePanel(panel.id); }, shortcut: 'closePanel' },
     { id: 'settings', label: 'Settings', icon: <TbSettings />, action: toggleSettings, shortcut: 'settings' },
     state.update.status === 'available'

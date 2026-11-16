@@ -11,16 +11,16 @@ import {
   type TreeNode, type StaleFolder,
 } from "./tree";
 import { loadSettings, saveSettings, type Settings } from "./settings";
+import * as L from "../tiling/layout";
+import * as W from "../tiling/workspaces";
 
 export type { TreeNode } from "./tree";
 
 const STORAGE_KEY = 'canopy_panels';
-const LAYOUT_KEY = 'canopy_layout';
+const WORKSPACES_KEY = 'canopy_workspaces';
 
-export type Layout = 'grid' | 'row';
-
-function loadLayout(): Layout {
-  try { return localStorage.getItem(LAYOUT_KEY) === 'row' ? 'row' : 'grid'; } catch { return 'grid'; }
+function loadSavedWorkspaces(): unknown {
+  try { return JSON.parse(localStorage.getItem(WORKSPACES_KEY) ?? 'null'); } catch { return null; }
 }
 
 function savePanels(panels: PanelItem[]) {
@@ -85,7 +85,7 @@ export type AppState = {
   quickOpenOpen: boolean;
   contextMenu: ContextMenuState;
   treeData: Record<string, TreeNode[]>;
-  layout: Layout;
+  workspaces: W.Workspaces;
   settings: Settings;
   update: UpdateState;
 };
@@ -108,7 +108,16 @@ type AppContextType = {
   closeContextMenu: () => void;
   /** `namePath` locates the node; `realPath` is its real filesystem path (for lazy loading). */
   toggleNodeCollapse: (panelId: string, namePath: string[], realPath: string[]) => void;
-  toggleLayout: () => void;
+  /** Flip the split containing the active panel (horizontal ↔ vertical). */
+  toggleSplitDir: () => void;
+  // Tiling (Hyprland-style)
+  tileFocus: (dir: L.Direction) => void;
+  tileSwap: (dir: L.Direction) => void;
+  tileResize: (dir: L.Direction) => void;
+  setSplitRatio: (path: ('a' | 'b')[], ratio: number) => void;
+  toggleFullscreen: () => void;
+  switchWorkspace: (n: number) => void;
+  moveToWorkspace: (n: number) => void;
   /** `manual`: report "up to date" / errors in the status bar (startup checks stay quiet). */
   checkUpdates: (manual: boolean) => void;
   installUpdate: () => void;
@@ -204,7 +213,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     quickOpenOpen: false,
     contextMenu: null,
     treeData: isTauri ? {} : mockTreeData,
-    layout: loadLayout(),
+    workspaces: isTauri ? W.emptyWorkspaces() : W.restoreWorkspaces(null, mockPanels),
     settings: loadSettings(),
     update: { status: 'idle' },
   });
@@ -295,8 +304,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
         ...prev,
         panels: [...prev.panels, ...restored.map(r => r.panel)],
         treeData: { ...prev.treeData, ...Object.fromEntries(restored.map(r => [r.panel.id, [r.rootNode]])) },
-        activePanelId: prev.activePanelId || restored[0]?.panel.id || "",
+        workspaces: W.restoreWorkspaces(loadSavedWorkspaces(), restored.map(r => r.panel)),
       }));
+      setState(prev => {
+        const first = L.leaves(W.activeLayout(prev.workspaces))[0] ?? restored[0]?.panel.id ?? "";
+        return { ...prev, activePanelId: prev.activePanelId || first };
+      });
       restored.forEach(r => watchDirectory(r.panel.id, r.panel.path!).catch(console.error));
     };
     restore();
@@ -392,11 +405,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
       savePanels(updated);
       const treeData = { ...prev.treeData };
       delete treeData[id];
+      const workspaces = W.removePanel(prev.workspaces, id);
+      // Focus moves to a neighbour on the same workspace
+      const remaining = L.leaves(W.activeLayout(workspaces));
       return {
         ...prev,
         panels: updated,
         treeData,
-        activePanelId: prev.activePanelId === id ? (updated[0]?.id ?? "") : prev.activePanelId,
+        workspaces: { ...workspaces, fullscreen: remaining.length ? workspaces.fullscreen : false },
+        activePanelId: prev.activePanelId === id ? (remaining[0] ?? "") : prev.activePanelId,
         selection: prev.selection?.panelId === id ? null : prev.selection,
       };
     });
@@ -404,7 +421,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const addPanel = async () => {
     if (!isTauri) {
-      setState(prev => ({ ...prev, panels: [...prev.panels, { id: Date.now().toString(), title: "new_panel" }] }));
+      const id = Date.now().toString();
+      setState(prev => ({
+        ...prev,
+        panels: [...prev.panels, { id, title: "new_panel" }],
+        workspaces: W.addPanel(prev.workspaces, id, prev.activePanelId),
+        activePanelId: id,
+      }));
       return;
     }
     const folderPath = await pickFolder();
@@ -415,7 +438,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setState(prev => {
         const updated = [...prev.panels, panel];
         savePanels(updated);
-        return { ...prev, panels: updated, treeData: { ...prev.treeData, [id]: [rootNode] }, activePanelId: id };
+        return {
+          ...prev,
+          panels: updated,
+          treeData: { ...prev.treeData, [id]: [rootNode] },
+          workspaces: W.addPanel(prev.workspaces, id, prev.activePanelId),
+          activePanelId: id,
+        };
       });
       watchDirectory(id, folderPath).catch(console.error);
     } catch (err) {
@@ -423,12 +452,68 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const toggleLayout = () =>
+  // ─── Tiling ───────────────────────────────────────────────────────
+  /** Apply `fn` to the active workspace's layout tree. */
+  const updateLayout = (fn: (layout: L.LayoutNode | null, active: string) => L.LayoutNode | null) =>
+    setState(prev => ({
+      ...prev,
+      workspaces: W.withActiveLayout(prev.workspaces, fn(W.activeLayout(prev.workspaces), prev.activePanelId)),
+    }));
+
+  const toggleSplitDir = () => updateLayout((l, active) => L.toggleSplit(l, active));
+  const tileResize = (dir: L.Direction) => updateLayout((l, active) => L.resize(l, active, dir));
+  const setSplitRatio = (path: ('a' | 'b')[], ratio: number) => updateLayout(l => L.setRatio(l, path, ratio));
+
+  const tileFocus = (dir: L.Direction) =>
     setState(prev => {
-      const layout: Layout = prev.layout === 'grid' ? 'row' : 'grid';
-      try { localStorage.setItem(LAYOUT_KEY, layout); } catch { /* ignore */ }
-      return { ...prev, layout };
+      const next = L.neighbor(W.activeLayout(prev.workspaces), prev.activePanelId, dir);
+      return next ? focusPanelById(prev, next) : prev;
     });
+
+  const tileSwap = (dir: L.Direction) =>
+    setState(prev => {
+      const layout = W.activeLayout(prev.workspaces);
+      const other = L.neighbor(layout, prev.activePanelId, dir);
+      if (!other) return prev;
+      return { ...prev, workspaces: W.withActiveLayout(prev.workspaces, L.swap(layout, prev.activePanelId, other)) };
+    });
+
+  const toggleFullscreen = () =>
+    setState(prev => ({ ...prev, workspaces: { ...prev.workspaces, fullscreen: !prev.workspaces.fullscreen } }));
+
+  /** Last focused panel per workspace, so switching back restores focus. */
+  const lastFocused = useRef<Record<number, string>>({});
+
+  const switchWorkspace = (n: number) =>
+    setState(prev => {
+      if (n === prev.workspaces.active) return prev;
+      lastFocused.current[prev.workspaces.active] = prev.activePanelId;
+      const workspaces = W.switchWorkspace(prev.workspaces, n);
+      const ids = L.leaves(W.activeLayout(workspaces));
+      const target = ids.includes(lastFocused.current[n]) ? lastFocused.current[n] : ids[0];
+      const next = { ...prev, workspaces };
+      return target ? focusPanelById(next, target) : { ...next, activePanelId: "", selection: null };
+    });
+
+  const moveToWorkspace = (n: number) =>
+    setState(prev => {
+      const id = prev.activePanelId;
+      if (!id) return prev;
+      const workspaces = W.moveToWorkspace(prev.workspaces, id, n);
+      if (workspaces === prev.workspaces) return prev;
+      const remaining = L.leaves(W.activeLayout(workspaces));
+      const next = { ...prev, workspaces: { ...workspaces, fullscreen: false } };
+      return remaining[0] ? focusPanelById(next, remaining[0]) : { ...next, activePanelId: "", selection: null };
+    });
+
+  // Persist workspaces (by folder path) whenever they or the panels change
+  useEffect(() => {
+    if (!isTauri) return;
+    const pathOf = (id: string) => state.panels.find(p => p.id === id)?.path;
+    try {
+      localStorage.setItem(WORKSPACES_KEY, JSON.stringify(W.serializeWorkspaces(state.workspaces, pathOf)));
+    } catch { /* storage unavailable */ }
+  }, [state.workspaces, state.panels]);
 
   const setSelection = (selection: Selection) =>
     setState(prev => ({
@@ -461,16 +546,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const focusPanel = (index: number) =>
     setState(prev => {
-      const panel = prev.panels[index];
-      return panel ? focusPanelById(prev, panel.id) : prev;
+      const id = L.leaves(W.activeLayout(prev.workspaces))[index];
+      return id ? focusPanelById(prev, id) : prev;
     });
 
   const cyclePanel = (delta: number) =>
     setState(prev => {
-      if (prev.panels.length === 0) return prev;
-      const cur = Math.max(0, prev.panels.findIndex(p => p.id === prev.activePanelId));
-      const next = (cur + delta + prev.panels.length) % prev.panels.length;
-      return focusPanelById(prev, prev.panels[next].id);
+      const ids = L.leaves(W.activeLayout(prev.workspaces));
+      if (ids.length === 0) return prev;
+      const cur = Math.max(0, ids.indexOf(prev.activePanelId));
+      return focusPanelById(prev, ids[(cur + delta + ids.length) % ids.length]);
     });
 
   /** Save settings and rescan every panel with them. */
@@ -523,7 +608,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       state, setActivePanelId, removePanel, addPanel,
       setSelection, toggleCommandPalette, toggleSettings, toggleQuickOpen, updateSettings,
       focusPanel, cyclePanel,
-      openContextMenu, closeContextMenu, toggleNodeCollapse, toggleLayout,
+      openContextMenu, closeContextMenu, toggleNodeCollapse, toggleSplitDir,
+      tileFocus, tileSwap, tileResize, setSplitRatio, toggleFullscreen, switchWorkspace, moveToWorkspace,
       checkUpdates, installUpdate,
     }}>
       {children}

@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { useAppContext } from '../contexts/AppContext';
-import { KEYMAP, matchesCombo, panelIndexFromEvent } from '../keymap';
+import { KEYMAP, matchesCombo, panelIndexFromEvent, pressedKey } from '../keymap';
+import type { Direction } from '../tiling/layout';
 import { visibleNodes } from '../contexts/tree';
 import { targetPaths } from '../services/paths';
 import { openInVSCode, openTerminal, revealInExplorer, copyToClipboard } from '../services/tauri';
@@ -38,7 +39,9 @@ export function useShortcuts() {
         ['settings', c.toggleSettings],
         ['addPanel', c.addPanel],
         ['closePanel', () => { if (state.activePanelId) c.removePanel(state.activePanelId); }],
-        ['toggleLayout', c.toggleLayout],
+        ['toggleLayout', c.toggleSplitDir],
+        ['tileFullscreen', c.toggleFullscreen],
+        ['tileToggleSplit', c.toggleSplitDir],
         ['prevPanel', () => { c.cyclePanel(-1); scrollSelectionIntoView(); }],
         ['nextPanel', () => { c.cyclePanel(1); scrollSelectionIntoView(); }],
       ];
@@ -49,6 +52,29 @@ export function useShortcuts() {
           return;
         }
       }
+      // ── Tiling (Alt-based, Hyprland style) ─────────────────────────
+      if (e.altKey && !e.metaKey) {
+        const k = pressedKey(e);
+        const dirs: Record<string, Direction> = {
+          h: 'left', j: 'down', k: 'up', l: 'right',
+          ArrowLeft: 'left', ArrowDown: 'down', ArrowUp: 'up', ArrowRight: 'right',
+        };
+        const dir = dirs[k];
+        // Alt+Ctrl+Arrows: resize (arrows only, so Ctrl+Alt letter combos / AltGr stay free)
+        if (e.ctrlKey && dir && k.startsWith('Arrow')) { e.preventDefault(); c.tileResize(dir); return; }
+        if (!e.ctrlKey && dir) {
+          e.preventDefault();
+          if (e.shiftKey) c.tileSwap(dir); else c.tileFocus(dir);
+          scrollSelectionIntoView();
+          return;
+        }
+        if (!e.ctrlKey && /^[1-9]$/.test(k)) {
+          e.preventDefault();
+          if (e.shiftKey) c.moveToWorkspace(Number(k)); else c.switchWorkspace(Number(k));
+          return;
+        }
+      }
+
       const panelIndex = panelIndexFromEvent(e);
       if (panelIndex !== null) {
         e.preventDefault();
