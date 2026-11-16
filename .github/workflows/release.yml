@@ -79,9 +79,11 @@ jobs:
           case "$TAG" in
             *-tiling*)
               parts+=('"productName":"Canopy Tiling"' '"identifier":"com.cristianpreda.canopy.tiling"')
-              echo "name=Canopy Tiling $TAG" >> "$GITHUB_OUTPUT" ;;
+              echo "name=Canopy Tiling $TAG" >> "$GITHUB_OUTPUT"
+              echo "app=Canopy Tiling" >> "$GITHUB_OUTPUT" ;;
             *)
-              echo "name=Canopy $TAG" >> "$GITHUB_OUTPUT" ;;
+              echo "name=Canopy $TAG" >> "$GITHUB_OUTPUT"
+              echo "app=Canopy" >> "$GITHUB_OUTPUT" ;;
           esac
           if [ ${#parts[@]} -gt 0 ]; then
             json="{$(IFS=,; echo "${parts[*]}")}"
@@ -90,6 +92,7 @@ jobs:
           fi
 
       - uses: tauri-apps/tauri-action@v0
+        id: tauri
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
@@ -104,3 +107,26 @@ jobs:
           prerelease: ${{ contains(github.ref_name, '-') }}
           args: ${{ matrix.args }} ${{ steps.config.outputs.args }}
           includeUpdaterJson: true
+
+      # Portable Windows build: the app is a single exe (frontend embedded,
+      # WebView2 comes with Windows), so zip it with a readme. No installer,
+      # no admin rights. Uploaded to the same (draft) release.
+      - name: Portable zip (Windows)
+        if: runner.os == 'Windows' && github.ref_type == 'tag'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_ID: ${{ steps.tauri.outputs.releaseId }}
+          APP: ${{ steps.config.outputs.app }}
+        run: |
+          $ver = (Get-Content src-tauri/tauri.conf.json -Raw | ConvertFrom-Json).version
+          $dir = Join-Path portable $env:APP
+          New-Item -ItemType Directory -Force $dir | Out-Null
+          Copy-Item src-tauri/target/release/canopy.exe (Join-Path $dir "$env:APP.exe")
+          Copy-Item docs/PORTABLE.txt (Join-Path $dir 'README.txt')
+          $zip = "$($env:APP -replace ' ', '_')_${ver}_x64_portable.zip"
+          Compress-Archive -Path $dir -DestinationPath $zip -Force
+          $uri = "https://uploads.github.com/repos/${{ github.repository }}/releases/$env:RELEASE_ID/assets?name=$zip"
+          Invoke-RestMethod -Method Post -Uri $uri -InFile $zip -ContentType 'application/zip' `
+            -Headers @{ Authorization = "Bearer $env:GH_TOKEN"; Accept = 'application/vnd.github+json' } | Out-Null
+          Write-Host "Uploaded $zip"

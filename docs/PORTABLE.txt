@@ -1,0 +1,33 @@
+Canopy - portable version (Windows x64)
+=======================================
+
+No installer and no admin rights needed.
+
+RUN
+  1. Unzip this folder anywhere (for example Documents\Tools\Canopy).
+  2. Double-click the .exe.
+
+REQUIREMENTS
+  - Windows 10 or 11 (64-bit).
+  - Microsoft Edge WebView2 Runtime. It is preinstalled on Windows 11 and
+    on up-to-date Windows 10. If the app doesn't start, get it from
+    https://developer.microsoft.com/microsoft-edge/webview2/
+  - Optional: Git, VS Code (`code` on PATH) and Windows Terminal for the
+    git colors and the "open in ..." actions.
+
+GOOD TO KNOW
+  - This build is not code-signed, so Windows SmartScreen may say
+    "Windows protected your PC / Unknown publisher". On a company device,
+    follow your organization's software policy: ask IT before using it.
+  - Your settings and open panels are stored per user in
+    %LOCALAPPDATA%\com.cristianpreda.canopy  (Canopy Tiling: ...canopy.tiling)
+  - Canopy only reads the folders you open, runs `git status` in them, and
+    launches VS Code / a terminal / Explorer when you ask it to. It never
+    modifies your files and doesn't upload anything.
+
+UNINSTALL
+  Delete the folder. To also remove settings, delete the folder above in
+  %LOCALAPPDATA%.
+
+Source code, docs and other downloads:
+  https://github.com/CristianPreda1609/canopy
