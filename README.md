@@ -231,6 +231,12 @@ cargo tauri build
 
 The build runs `npm run build` for the frontend and then compiles an optimized binary. The installers end up in `src-tauri/target/release/bundle/`: MSI/NSIS on Windows, `.dmg`/`.app` on macOS, and `.deb`/`.rpm`/`.AppImage` on Linux.
 
+### Portable version (Windows)
+
+Every release also includes **`Canopy_<version>_x64_portable.zip`**: just the app plus a readme. Unzip it anywhere and run `Canopy.exe`. There's no installer and no admin rights needed. It needs the WebView2 runtime, which comes with Windows 10 and 11.
+
+The portable build isn't code-signed either, so Windows SmartScreen may warn about an unknown publisher. On work computers, follow your organization's software policy. To remove it, delete the folder (settings live in `%LOCALAPPDATA%\com.cristianpreda.canopy`). See [`docs/PORTABLE.txt`](docs/PORTABLE.txt).
+
 ### Testing
 
 ```powershell
