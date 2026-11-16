@@ -63,3 +63,46 @@ test('Alt combos match the physical key (macOS Option produces symbols)', async 
   assert.equal(pressedKey({ ...ev('#', { altKey: true, shiftKey: true }), code: 'Digit3' }), '3');
   assert.equal(pressedKey(ev('ArrowLeft', { altKey: true })), 'ArrowLeft');
 });
+
+/** Shaped like a real KeyboardEvent: fields are getters on the prototype, not own properties. */
+class FakeKeyboardEvent {
+  #init: KeyLike;
+  constructor(init: KeyLike) { this.#init = init; }
+  get key() { return this.#init.key; }
+  get code() { return this.#init.code; }
+  get ctrlKey() { return this.#init.ctrlKey; }
+  get metaKey() { return this.#init.metaKey; }
+  get shiftKey() { return this.#init.shiftKey; }
+  get altKey() { return this.#init.altKey; }
+}
+
+test('comboFromEvent works with real (getter-based) events', async () => {
+  const { comboFromEvent } = await import('./keymap.ts');
+  assert.equal({ ...new FakeKeyboardEvent(ev('k')) }.key, undefined, 'spreading loses the fields');
+  assert.equal(comboFromEvent(new FakeKeyboardEvent(ev('k', { ctrlKey: true })), false), 'Mod+K');
+  assert.equal(comboFromEvent(new FakeKeyboardEvent(ev('F5')), false), 'F5');
+});
+
+test('custom bindings: recording, validation and conflicts', async () => {
+  const { comboFromEvent, isValidBinding, findConflict, comboFor } = await import('./keymap.ts');
+  assert.equal(comboFromEvent(ev('k', { ctrlKey: true, shiftKey: true }), false), 'Mod+Shift+K');
+  assert.equal(comboFromEvent(ev('k', { metaKey: true }), true), 'Mod+K');
+  assert.equal(comboFromEvent(ev('Control', { ctrlKey: true }), false), null, 'only a modifier so far');
+  assert.equal(comboFromEvent(ev('F2'), false), 'F2');
+  // macOS Option+K types "˚", but the binding is recorded by physical key
+  assert.equal(comboFromEvent({ ...ev('˚', { altKey: true }), code: 'KeyK' }, true), 'Alt+K');
+
+  assert.ok(isValidBinding('Mod+K'));
+  assert.ok(isValidBinding('Alt+G'));
+  assert.ok(isValidBinding('F5'));
+  assert.ok(!isValidBinding('K'), 'plain letters would steal tree navigation');
+  assert.ok(!isValidBinding('Shift+K'));
+
+  assert.equal(findConflict('settings', 'Mod+P'), 'quickOpen');
+  assert.equal(findConflict('settings', 'mod+p'), 'quickOpen', 'case-insensitive');
+  assert.equal(findConflict('settings', 'Mod+K'), null);
+  // Once quickOpen is moved, Mod+P is free
+  assert.equal(findConflict('settings', 'Mod+P', { quickOpen: 'Mod+K' }), null);
+  assert.equal(comboFor('quickOpen', { quickOpen: 'Mod+K' }), 'Mod+K');
+  assert.equal(comboFor('focusPanel', { focusPanel: 'Mod+X' }), 'Mod+1…9', 'fixed shortcuts ignore overrides');
+});

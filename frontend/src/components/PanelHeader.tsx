@@ -24,12 +24,15 @@ export function PanelHeader({ title, badge, id, gitBranch, gitDirty }: PanelHead
 
   return (
     <div className="panel-header">
-      <div className="panel-title">
+      <div className="panel-title" title={title}>
         <TbFolder style={{ fontSize: '13px', color: 'rgba(240,120,50,0.55)' }} />
         <span>{title}</span>
-        {badge && <span className={`badge ${getBadgeClass(badge)}`}>{badge}</span>}
+        {badge && <span className={`badge ${getBadgeClass(badge)}`} title={`Most files here are ${badge}`}>{badge}</span>}
         {gitBranch && (
-          <span className={`git-badge ${gitDirty ? 'dirty' : 'clean'}`}>
+          <span
+            className={`git-badge ${gitDirty ? 'dirty' : 'clean'}`}
+            title={`Git branch "${gitBranch}" · ${gitDirty ? 'has uncommitted changes' : 'no uncommitted changes'}`}
+          >
             <TbGitBranch style={{ 
               fontSize: '12px', 
               marginRight: '3px',
@@ -49,7 +52,8 @@ export function PanelHeader({ title, badge, id, gitBranch, gitDirty }: PanelHead
         }}
         className="tb-btn"
         style={{ padding: '2px 4px' }}
-        aria-label="close"
+        aria-label={`Close panel ${title}`}
+        title={`Close the "${title}" panel`}
       >
         <TbX style={{ fontSize: '11px' }} />
       </button>

@@ -75,6 +75,8 @@ export type UpdateState =
   | { status: 'installing'; version: string; progress: number | null }
   | { status: 'error'; message: string };
 
+export type SettingsTab = 'general' | 'git' | 'shortcuts';
+
 export type AppState = {
   panels: PanelItem[];
   activePanelId: string;
@@ -82,6 +84,7 @@ export type AppState = {
   selection: Selection;
   commandPaletteOpen: boolean;
   settingsOpen: boolean;
+  settingsTab: SettingsTab;
   quickOpenOpen: boolean;
   contextMenu: ContextMenuState;
   treeData: Record<string, TreeNode[]>;
@@ -97,7 +100,9 @@ type AppContextType = {
   addPanel: () => void;
   setSelection: (sel: Selection) => void;
   toggleCommandPalette: () => void;
-  toggleSettings: () => void;
+  /** Open/close settings. With a tab: open on that tab (switching tabs if already open). */
+  toggleSettings: (tab?: SettingsTab) => void;
+  setSettingsTab: (tab: SettingsTab) => void;
   toggleQuickOpen: () => void;
   /** Focus the panel at `index` (0-based); also moves the selection there. */
   focusPanel: (index: number) => void;
@@ -210,6 +215,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     selection: null,
     commandPaletteOpen: false,
     settingsOpen: false,
+    settingsTab: 'general',
     quickOpenOpen: false,
     contextMenu: null,
     treeData: isTauri ? {} : mockTreeData,
@@ -528,8 +534,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const toggleCommandPalette = () =>
     setState(prev => ({ ...prev, ...NO_OVERLAYS, commandPaletteOpen: !prev.commandPaletteOpen }));
 
-  const toggleSettings = () =>
-    setState(prev => ({ ...prev, ...NO_OVERLAYS, settingsOpen: !prev.settingsOpen }));
+  const toggleSettings = (tab?: SettingsTab) =>
+    setState(prev => {
+      if (tab && prev.settingsOpen && prev.settingsTab !== tab) return { ...prev, settingsTab: tab };
+      return { ...prev, ...NO_OVERLAYS, settingsOpen: !prev.settingsOpen, settingsTab: tab ?? 'general' };
+    });
+
+  const setSettingsTab = (settingsTab: SettingsTab) => setState(prev => ({ ...prev, settingsTab }));
 
   const toggleQuickOpen = () =>
     setState(prev => ({ ...prev, ...NO_OVERLAYS, quickOpenOpen: !prev.quickOpenOpen }));
@@ -560,10 +571,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   /** Save settings and rescan every panel with them. */
   const updateSettings = (next: Settings) => {
+    const prev = settingsRef.current;
     saveSettings(next);
     settingsRef.current = next;
-    setState(prev => ({ ...prev, settings: next }));
-    panelsRef.current.forEach(p => refreshPanel(p.id));
+    setState(s => ({ ...s, settings: next }));
+    // Only scan settings require rescanning (colors / shortcuts don't)
+    const rescan = prev.scanDepth !== next.scanDepth || prev.showHidden !== next.showHidden
+      || JSON.stringify(prev.skipDirs) !== JSON.stringify(next.skipDirs);
+    if (rescan) panelsRef.current.forEach(p => refreshPanel(p.id));
   };
 
   const openContextMenu = (x: number, y: number, targetPath: string, panelPath?: string, isFolder?: boolean) =>
@@ -606,7 +621,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   return (
     <AppContext.Provider value={{
       state, setActivePanelId, removePanel, addPanel,
-      setSelection, toggleCommandPalette, toggleSettings, toggleQuickOpen, updateSettings,
+      setSelection, toggleCommandPalette, toggleSettings, setSettingsTab, toggleQuickOpen, updateSettings,
       focusPanel, cyclePanel,
       openContextMenu, closeContextMenu, toggleNodeCollapse, toggleSplitDir,
       tileFocus, tileSwap, tileResize, setSplitRatio, toggleFullscreen, switchWorkspace, moveToWorkspace,

@@ -44,7 +44,7 @@ Canopy is built with **[Tauri 2](https://tauri.app/)**, so it uses a native Rust
 
 - 📂 **Multi-panel workspace**: open any number of project folders, each in its own panel.
 - 🌲 **Fast, lazy file tree**: only the first few levels load up front, and deeper folders load when you expand them, so huge repos open instantly. Folders come first, sorted alphabetically. Heavy folders such as `node_modules` and `target` aren't scanned until you open them.
-- ⚙️ **Settings**: scan depth, hidden files, and which folders to skip.
+- ⚙️ **Settings**: scan depth, hidden files, skipped folders, **custom git colors**, and **rebindable shortcuts** with a built-in shortcuts guide (`F1`).
 - 🗜️ **Compact folders**: chains of single-child folders are merged into one row (`src / main / java`), the same way VS Code does it.
 - 🔄 **Live reload**: a file watcher on each panel refreshes the tree when files are created, modified or deleted.
 - 🌿 **Git integration**: shows the current branch and whether there are uncommitted changes, and colors each file by its git status.
@@ -271,6 +271,8 @@ Copy `icons/64x64.png` to `frontend/public/favicon.png` and `icons/128x128.png` 
 
 Canopy can be used entirely from the keyboard. On macOS, use `⌘` instead of `Ctrl`.
 
+Press **`F1`** for the shortcuts guide. To **change any app shortcut**, open Settings → **Shortcuts**, click a shortcut and press the new keys. Conflicts are detected, and bindings need `Ctrl`/`⌘` or `Alt`, or must be a function key. Tooltips and the command palette always show your current bindings.
+
 **App**
 
 | Shortcut | Action |
@@ -283,6 +285,7 @@ Canopy can be used entirely from the keyboard. On macOS, use `⌘` instead of `C
 | `Ctrl+\` | Toggle split direction of the focused panel |
 | `Ctrl+1` … `Ctrl+9` | Jump to panel 1–9 |
 | `Ctrl+Tab` / `Ctrl+Shift+Tab` | Next / previous panel |
+| `F1` | Keyboard shortcuts guide |
 | `Esc` | Close the palette, dialog or context menu |
 
 **Tiling** *(experimental: `experimental/tiling` branch)*

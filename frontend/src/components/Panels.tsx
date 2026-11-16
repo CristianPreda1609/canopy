@@ -4,7 +4,7 @@ import { TreeView } from "./TreeView";
 import { useAppContext, type PanelItem } from "../contexts/AppContext";
 import { activeLayout } from "../tiling/workspaces";
 import type { LayoutNode } from "../tiling/layout";
-import { KEYMAP, formatCombo } from "../keymap";
+import { comboFor, formatCombo } from "../keymap";
 import { TbPlus } from "react-icons/tb";
 
 /** One tiled panel: header + file tree. */
@@ -89,7 +89,7 @@ export function Panels() {
           <TbPlus style={{ fontSize: '22px' }} />
           <span>Open a folder</span>
           <span className="tile-empty-hint">
-            {formatCombo(KEYMAP.addPanel.combo)} to open · Alt+1…9 to switch workspace (now {state.workspaces.active})
+            {formatCombo(comboFor('addPanel', state.settings.keybindings))} to open · Alt+1…9 to switch workspace (now {state.workspaces.active})
           </span>
         </button>
       </div>

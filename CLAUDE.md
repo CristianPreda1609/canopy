@@ -70,6 +70,8 @@ Before finishing a change, run what CI runs for whatever you touched: `npm run l
 
 ## Path conventions (frontend)
 
+- **Shortcuts are user-rebindable:** always resolve combos with `comboFor(id, state.settings.keybindings)`, never `KEYMAP[id].combo` directly. Never spread a KeyboardEvent (`{...e}`) — its fields are prototype getters, so the copy is empty.
+- **Title bar:** window dragging must skip interactive elements (see `handleDrag`), or native drag swallows button clicks.
 - **Shortcuts:** add new ones to `KEYMAP` in `src/keymap.ts` (it drives the handler in `hooks/useShortcuts.ts` and the palette hints), then document them in the README. Use `Mod`, never a raw `Ctrl`, so macOS gets `⌘`. Tree keys only fire when no overlay is open and focus isn't in an input.
 - Pure tree logic lives in `contexts/tree.ts` (tested in `tree.test.ts`). Keep React and Tauri out of it.
 - Lazy loading: folders beyond the scan depth or in the skip list arrive `unloaded` (no `children`). `toggleNodeCollapse` fetches them; `refreshPanel` re-fetches expanded deep folders via the `stale` list from `mergeTreeState`.
