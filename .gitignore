@@ -1,0 +1,13 @@
+# Code dumps / generated snapshots — never commit
+CODE_DUMP*.md
+dump_code.*
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# Logs
+*.log
