@@ -31,6 +31,25 @@ export type Settings = {
   gitColors: Partial<Record<GitColorKey, string>>;
   /** Overrides of the default shortcuts in KEYMAP. */
   keybindings: KeyBindings;
+  /** Tray / window behavior (desktop app only). */
+  background: BackgroundSettings;
+};
+
+export type WindowMode = 'normal' | 'fullscreen' | 'background';
+
+export type BackgroundSettings = {
+  /** normal window, fullscreen, or fullscreen kept behind other windows */
+  windowMode: WindowMode;
+  /** Closing the window hides it to the tray instead of quitting */
+  closeToTray: boolean;
+  /** Start Canopy when you log in */
+  launchAtLogin: boolean;
+};
+
+export const DEFAULT_BACKGROUND: BackgroundSettings = {
+  windowMode: 'normal',
+  closeToTray: true,
+  launchAtLogin: false,
 };
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -39,6 +58,7 @@ export const DEFAULT_SETTINGS: Settings = {
   skipDirs: null,
   gitColors: {},
   keybindings: {},
+  background: DEFAULT_BACKGROUND,
 };
 
 /** The color in effect for a git status. */
@@ -65,6 +85,17 @@ export function normalizeSettings(raw: unknown): Settings {
       k in DEFAULT_GIT_COLORS && typeof v === 'string' && /^#[0-9a-f]{6}$/i.test(v)),
     keybindings: pickValid(r.keybindings, (k, v) =>
       k in KEYMAP && isRebindable(k as ShortcutId) && typeof v === 'string' && isValidBinding(v)),
+    background: normalizeBackground(r.background),
+  };
+}
+
+function normalizeBackground(raw: unknown): BackgroundSettings {
+  const b = (raw && typeof raw === 'object' ? raw : {}) as Partial<Record<keyof BackgroundSettings, unknown>>;
+  const modes: WindowMode[] = ['normal', 'fullscreen', 'background'];
+  return {
+    windowMode: modes.includes(b.windowMode as WindowMode) ? b.windowMode as WindowMode : DEFAULT_BACKGROUND.windowMode,
+    closeToTray: typeof b.closeToTray === 'boolean' ? b.closeToTray : DEFAULT_BACKGROUND.closeToTray,
+    launchAtLogin: typeof b.launchAtLogin === 'boolean' ? b.launchAtLogin : DEFAULT_BACKGROUND.launchAtLogin,
   };
 }
 

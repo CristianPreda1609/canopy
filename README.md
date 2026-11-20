@@ -55,6 +55,7 @@ Canopy is built with **[Tauri 2](https://tauri.app/)**, so it uses a native Rust
 
 - 📂 **Multi-panel workspace**: open any number of project folders, each in its own panel.
 - 🌲 **Fast, lazy file tree**: only the first few levels load up front, and deeper folders load when you expand them, so huge repos open instantly. Folders come first, sorted alphabetically. Heavy folders such as `node_modules` and `target` aren't scanned until you open them.
+- 🌙 **Background mode**: lives in the system tray, keeps running when closed, and comes up from any app with **`Ctrl+Shift+Space`**. It can run fullscreen, or as a fullscreen "desktop" **behind** your other windows, and optionally start with Windows.
 - ⚙️ **Settings**: scan depth, hidden files, skipped folders, **custom git colors**, and **rebindable shortcuts** with a built-in shortcuts guide (`F1`).
 - 🗜️ **Compact folders**: chains of single-child folders are merged into one row (`src / main / java`), the same way VS Code does it.
 - 🔄 **Live reload**: a file watcher on each panel refreshes the tree when files are created, modified or deleted.
@@ -307,6 +308,20 @@ Copy `icons/64x64.png` to `frontend/public/favicon.png` and `icons/128x128.png` 
 4. Right-click any file or folder, or hold **Ctrl** while hovering over it, to open the context menu.
 5. Close a panel with the **×** in its header. Your open panels are restored the next time you start Canopy.
 
+### Background mode & tray
+
+Canopy can live in the background like a launcher:
+
+- **System tray icon** (next to the clock): click to show or hide; right-click for **Quit**.
+- **Closing the window hides it to the tray.** Turn this off in Settings → General → *Keep running in the tray*. Quit for real from the tray menu or the palette (**Quit Canopy**).
+- **`Ctrl+Shift+Space` from any app** shows Canopy, and pressing it again hides it. You can rebind it in Settings → Shortcuts.
+- **Window mode** (Settings → General):
+  - **Normal window**
+  - **Fullscreen**
+  - **Background**: fullscreen *behind* your other windows. The shortcut brings it forward; press it again (or click your other app) and it goes back behind, returning focus to what you were doing.
+- **Start with Windows / at login** (off by default).
+- Opening Canopy again while it's already running just brings up the running copy.
+
 ### Keyboard Shortcuts
 
 Canopy can be used entirely from the keyboard. On macOS, use `⌘` instead of `Ctrl`.
@@ -326,6 +341,7 @@ Press **`F1`** for the shortcuts guide. To **change any app shortcut**, open Set
 | `Ctrl+1` … `Ctrl+9` | Jump to panel 1–9 |
 | `Ctrl+Tab` / `Ctrl+Shift+Tab` | Next / previous panel |
 | `F1` | Keyboard shortcuts guide |
+| `Ctrl+Shift+Space` | Show / hide Canopy **from any app** (global) |
 | `Esc` | Close the palette, dialog or context menu |
 
 **Tiling** *(experimental: `experimental/tiling` branch)*
@@ -337,10 +353,17 @@ Press **`F1`** for the shortcuts guide. To **change any app shortcut**, open Set
 | `Alt+Ctrl+Arrows` | Resize (move the nearest divider) |
 | `Alt+F` | Fullscreen the focused panel |
 | `Alt+E` (or `Ctrl+\`) | Toggle split direction |
+| `Alt+M` | Next layout: **balanced** grid → **master** + stack → **dwindle** |
+| `Alt+B` | Rebalance: make all panels equal again after resizing |
 | `Alt+1` … `Alt+9` | Switch workspace |
 | `Alt+Shift+1` … `Alt+Shift+9` | Send the focused panel to a workspace |
 
-New panels split the focused panel (wider panels split side by side, taller ones split top/bottom). You can also drag the dividers. Layouts and workspaces are saved per folder and restored on launch. `Ctrl+1…9` and `Ctrl+Tab` work within the current workspace. On macOS, `Alt` is `Option`, and keys are matched by physical position, so `Option+H` works even though it types `˙`.
+**Layouts** (title bar button or `Alt+M`):
+- **Balanced** (default): a near-square grid where every panel gets the same space. 2 panels sit side by side, 3 become 2 on top plus 1 full-width below, 4 make a 2×2 grid, and so on. It rebalances whenever you open or close a panel.
+- **Master**: the first panel is big on the left (55%), and the rest are stacked evenly on the right.
+- **Dwindle**: each new panel splits the focused one, Hyprland-style. It's flexible, but panels get small quickly.
+
+In dwindle, wider panels split side by side and taller ones split top/bottom. You can also drag the dividers. Layouts and workspaces are saved per folder and restored on launch. `Ctrl+1…9` and `Ctrl+Tab` work within the current workspace. On macOS, `Alt` is `Option`, and keys are matched by physical position, so `Option+H` works even though it types `˙`.
 
 **File tree** (active panel)
 

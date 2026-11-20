@@ -203,3 +203,60 @@ export function deserialize(saved: unknown, idOf: (path: string) => string | und
   }
   return null;
 }
+
+// ─── Layout modes ───────────────────────────────────────────────────
+// dwindle: each new panel splits the focused one (can get small fast)
+// balanced: near-square grid, everything the same size
+// master: one big panel on the left, the rest stacked on the right
+
+export type LayoutMode = 'balanced' | 'master' | 'dwindle';
+export const LAYOUT_MODES: LayoutMode[] = ['balanced', 'master', 'dwindle'];
+
+/** Nest nodes into a chain of splits in one direction (sizes fixed by `balance`). */
+function chain(nodes: LayoutNode[], dir: Dir): LayoutNode {
+  if (nodes.length === 1) return nodes[0];
+  return { type: 'split', dir, ratio: 0.5, a: nodes[0], b: chain(nodes.slice(1), dir) };
+}
+
+/** How many equal slots a node takes along `dir` (for rebalancing). */
+function slots(node: LayoutNode, dir: Dir): number {
+  if (node.type === 'leaf' || node.dir !== dir) return 1;
+  return slots(node.a, dir) + slots(node.b, dir);
+}
+
+/**
+ * Equalize sizes: every split gets the ratio that gives each slot along its
+ * direction the same space (a chain of 3 columns -> 1/3, 2/3 ...).
+ */
+export function balance(root: LayoutNode | null): LayoutNode | null {
+  if (!root || root.type === 'leaf') return root;
+  const a = balance(root.a)!;
+  const b = balance(root.b)!;
+  const sa = slots(a, root.dir);
+  return { ...root, a, b, ratio: sa / (sa + slots(b, root.dir)) };
+}
+
+/** Near-square grid: rows of equal height, panels in a row of equal width. */
+export function buildBalanced(ids: string[]): LayoutNode | null {
+  if (ids.length === 0) return null;
+  const cols = Math.ceil(Math.sqrt(ids.length));
+  const rows: LayoutNode[] = [];
+  for (let i = 0; i < ids.length; i += cols) {
+    rows.push(chain(ids.slice(i, i + cols).map(leaf), 'h'));
+  }
+  return balance(chain(rows, 'v'));
+}
+
+/** First panel big on the left (55%), the rest stacked evenly on the right. */
+export function buildMaster(ids: string[]): LayoutNode | null {
+  if (ids.length <= 1) return ids.length ? leaf(ids[0]) : null;
+  const stack = balance(chain(ids.slice(1).map(leaf), 'v'))!;
+  return { type: 'split', dir: 'h', ratio: 0.55, a: leaf(ids[0]), b: stack };
+}
+
+/** Rebuild a layout for `mode`, keeping the panel order. Dwindle keeps its tree. */
+export function relayout(root: LayoutNode | null, mode: LayoutMode): LayoutNode | null {
+  if (mode === 'dwindle') return root;
+  const ids = leaves(root);
+  return mode === 'master' ? buildMaster(ids) : buildBalanced(ids);
+}

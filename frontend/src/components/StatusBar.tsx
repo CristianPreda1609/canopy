@@ -32,6 +32,9 @@ function UpdateIndicator({ fallback }: { fallback: string }) {
     case 'error':
       return <div className="si warn"><TbAlertTriangle style={{ fontSize: '12px' }} /> {u.message}</div>;
     default:
+      if (state.notice) {
+        return <div className="si warn si-path" title={state.notice}><TbAlertTriangle style={{ fontSize: '12px' }} /> {state.notice}</div>;
+      }
       return <div className="si ok" title="Canopy is running"><TbCircleCheck style={{ fontSize: '12px' }} /> {fallback}</div>;
   }
 }

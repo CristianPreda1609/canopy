@@ -1,7 +1,7 @@
 import { createContext, useState, useContext, useEffect, useRef } from "react";
 import type { ReactNode } from "react";
 import {
-  pickFolder, readDirectory, isTauri, getGitInfo, watchDirectory, unwatchDirectory, checkForUpdate,
+  pickFolder, readDirectory, isTauri, getGitInfo, watchDirectory, unwatchDirectory, checkForUpdate, setBackgroundOptions,
   type ScanOptions, type AvailableUpdate,
 } from "../services/tauri";
 import { resolveTreePath } from "../services/paths";
@@ -13,6 +13,7 @@ import {
 import { loadSettings, saveSettings, type Settings } from "./settings";
 import * as L from "../tiling/layout";
 import * as W from "../tiling/workspaces";
+import { comboFor } from "../keymap";
 
 export type { TreeNode } from "./tree";
 
@@ -91,6 +92,8 @@ export type AppState = {
   workspaces: W.Workspaces;
   settings: Settings;
   update: UpdateState;
+  /** Short message for the status bar (e.g. a shortcut that couldn't be registered) */
+  notice: string | null;
 };
 
 type AppContextType = {
@@ -123,6 +126,11 @@ type AppContextType = {
   toggleFullscreen: () => void;
   switchWorkspace: (n: number) => void;
   moveToWorkspace: (n: number) => void;
+  /** Balanced grid / master + stack / dwindle */
+  setLayoutMode: (mode: L.LayoutMode) => void;
+  cycleLayoutMode: () => void;
+  /** Equalize panel sizes on the current workspace */
+  balanceLayout: () => void;
   /** `manual`: report "up to date" / errors in the status bar (startup checks stay quiet). */
   checkUpdates: (manual: boolean) => void;
   installUpdate: () => void;
@@ -225,6 +233,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     workspaces: isTauri ? W.emptyWorkspaces() : W.restoreWorkspaces(null, mockPanels),
     settings: loadSettings(),
     update: { status: 'idle' },
+    notice: null,
   });
 
   // Refs so async callbacks (watcher events, lazy loads) see current values
@@ -348,6 +357,27 @@ export function AppProvider({ children }: { children: ReactNode }) {
       Object.values(debounceTimers).forEach(clearTimeout);
     };
   }, []);
+
+  // ─── Notices ──────────────────────────────────────────────────────
+  const noticeTimer = useRef<number | undefined>(undefined);
+  const showNotice = (notice: string) => {
+    setState(prev => ({ ...prev, notice }));
+    clearTimeout(noticeTimer.current);
+    noticeTimer.current = setTimeout(() => setState(prev => ({ ...prev, notice: null })), 8000);
+  };
+
+  // ─── Background mode (tray, window mode, summon shortcut, start at login) ──
+  const bg = state.settings.background;
+  const summonCombo = comboFor('summon', state.settings.keybindings);
+  useEffect(() => {
+    if (!isTauri) return;
+    setBackgroundOptions({
+      closeToTray: bg.closeToTray,
+      windowMode: bg.windowMode,
+      summonShortcut: summonCombo,
+      launchAtLogin: bg.launchAtLogin,
+    }).catch(err => showNotice(String(err)));
+  }, [bg.closeToTray, bg.windowMode, bg.launchAtLogin, summonCombo]);
 
   // ─── Auto-update ──────────────────────────────────────────────────
   const pendingUpdate = useRef<AvailableUpdate | null>(null);
@@ -486,6 +516,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (!other) return prev;
       return { ...prev, workspaces: W.withActiveLayout(prev.workspaces, L.swap(layout, prev.activePanelId, other)) };
     });
+
+  const setLayoutMode = (mode: L.LayoutMode) =>
+    setState(prev => ({ ...prev, workspaces: W.relayoutAll(prev.workspaces, mode) }));
+
+  const cycleLayoutMode = () =>
+    setState(prev => {
+      const modes = L.LAYOUT_MODES;
+      const next = modes[(modes.indexOf(prev.workspaces.mode) + 1) % modes.length];
+      return { ...prev, workspaces: W.relayoutAll(prev.workspaces, next) };
+    });
+
+  const balanceLayout = () => updateLayout(l => L.balance(l));
 
   const toggleFullscreen = () =>
     setState(prev => ({ ...prev, workspaces: { ...prev.workspaces, fullscreen: !prev.workspaces.fullscreen } }));
@@ -628,6 +670,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       focusPanel, cyclePanel,
       openContextMenu, closeContextMenu, toggleNodeCollapse, toggleSplitDir,
       tileFocus, tileSwap, tileResize, setSplitRatio, toggleFullscreen, switchWorkspace, moveToWorkspace,
+      setLayoutMode, cycleLayoutMode, balanceLayout,
       checkUpdates, installUpdate,
     }}>
       {children}

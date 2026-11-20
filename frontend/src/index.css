@@ -491,3 +491,5 @@ button.shortcut-pill { font-family: var(--font-sans); line-height: inherit; }
 
 .ctx-item { white-space: nowrap; }
 .ctx-menu { background: rgba(20, 14, 38, 0.97); backdrop-filter: blur(10px); }
+.settings-select { padding: 5px 8px; cursor: pointer; }
+.settings-select option { background: #1a1230; color: var(--color-text-main); }

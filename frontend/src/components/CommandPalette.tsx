@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useAppContext } from '../contexts/AppContext';
 import { targetPaths, fileManagerName } from '../services/paths';
-import { openInVSCode, openTerminal, openInExplorer, revealInExplorer, copyToClipboard } from '../services/tauri';
+import { openInVSCode, openTerminal, openInExplorer, revealInExplorer, copyToClipboard, quitApp } from '../services/tauri';
 import { comboFor, formatCombo, type ShortcutId } from '../keymap';
 import { fuzzyFilter } from '../fuzzy';
 import {
@@ -16,7 +16,13 @@ import {
   TbCopy,
   TbSquareX,
   TbMaximize,
+  TbLayoutGrid,
+  TbLayoutSidebar,
+  TbLayoutDistributeHorizontal,
+  TbArrowsHorizontal,
   TbKeyboard,
+  TbPower,
+  TbLayoutBottombar,
   TbPalette,
   TbDownload,
   TbRefresh,
@@ -34,7 +40,7 @@ type CommandItem = {
 export function CommandPalette() {
   const {
     state, toggleCommandPalette, addPanel, toggleSplitDir, toggleSettings, toggleQuickOpen, removePanel,
-    toggleFullscreen,
+    toggleFullscreen, setLayoutMode, balanceLayout,
     checkUpdates, installUpdate,
   } = useAppContext();
   const [search, setSearch] = useState('');
@@ -59,11 +65,17 @@ export function CommandPalette() {
     { id: 'reveal-explorer', label: `Reveal in ${fileManagerName}`, icon: <TbExternalLink />, action: run(revealInExplorer, 'full') },
     { id: 'copy-path', label: 'Copy path', icon: <TbCopy />, action: run(copyToClipboard, 'full') },
     { id: 'toggle-split', label: 'Toggle split direction', icon: <TbLayoutColumns />, action: toggleSplitDir, shortcut: 'tileToggleSplit' },
+    { id: 'layout-balanced', label: 'Layout: balanced grid', icon: <TbLayoutGrid />, action: () => setLayoutMode('balanced') },
+    { id: 'layout-master', label: 'Layout: master + stack', icon: <TbLayoutSidebar />, action: () => setLayoutMode('master') },
+    { id: 'layout-dwindle', label: 'Layout: dwindle (spiral)', icon: <TbLayoutDistributeHorizontal />, action: () => setLayoutMode('dwindle') },
+    { id: 'layout-balance', label: 'Rebalance panel sizes', icon: <TbArrowsHorizontal />, action: balanceLayout, shortcut: 'tileBalance' },
     { id: 'fullscreen', label: 'Fullscreen panel', icon: <TbMaximize />, action: toggleFullscreen, shortcut: 'tileFullscreen' },
     { id: 'close-panel', label: 'Close panel', icon: <TbSquareX />, action: () => { if (panel) removePanel(panel.id); }, shortcut: 'closePanel' },
     { id: 'settings', label: 'Settings', icon: <TbSettings />, action: () => toggleSettings(), shortcut: 'settings' },
     { id: 'shortcuts', label: 'Keyboard shortcuts', icon: <TbKeyboard />, action: () => toggleSettings('shortcuts'), shortcut: 'shortcutsHelp' },
     { id: 'git-colors', label: 'Change git colors', icon: <TbPalette />, action: () => toggleSettings('git') },
+    { id: 'background', label: 'Background mode & tray settings', icon: <TbLayoutBottombar />, action: () => toggleSettings('general') },
+    { id: 'quit', label: 'Quit Canopy', icon: <TbPower />, action: () => { quitApp().catch(console.error); } },
     state.update.status === 'available'
       ? { id: 'install-update', label: `Install update v${state.update.version} and restart`, icon: <TbDownload />, action: installUpdate }
       : { id: 'check-updates', label: 'Check for updates', icon: <TbRefresh />, action: () => checkUpdates(true) },

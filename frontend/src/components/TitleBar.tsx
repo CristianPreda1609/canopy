@@ -1,6 +1,9 @@
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useAppContext } from "../contexts/AppContext";
-import { TbLayoutColumns, TbLayoutRows, TbSettings, TbMinus, TbX, TbSearch, TbMaximize, TbFolderPlus } from "react-icons/tb";
+import {
+  TbLayoutColumns, TbLayoutRows, TbSettings, TbMinus, TbX, TbSearch, TbMaximize, TbFolderPlus,
+  TbLayoutGrid, TbLayoutSidebar, TbLayoutDistributeHorizontal,
+} from "react-icons/tb";
 import { WORKSPACE_COUNT, occupiedWorkspaces, activeLayout } from "../tiling/workspaces";
 import { leaves } from "../tiling/layout";
 import { comboFor, formatCombo, type ShortcutId } from "../keymap";
@@ -16,7 +19,14 @@ const safeCall = (fn: () => void) => {
 export function TitleBar() {
   const {
     state, toggleCommandPalette, toggleSplitDir, toggleSettings, toggleFullscreen, switchWorkspace, addPanel,
+    cycleLayoutMode,
   } = useAppContext();
+  const mode = state.workspaces.mode;
+  const MODE_INFO = {
+    balanced: { icon: <TbLayoutGrid />, label: 'Balanced grid' },
+    master: { icon: <TbLayoutSidebar />, label: 'Master + stack' },
+    dwindle: { icon: <TbLayoutDistributeHorizontal />, label: 'Dwindle (spiral)' },
+  } as const;
   const occupied = new Set(occupiedWorkspaces(state.workspaces));
   /** "Label (Ctrl+X)" with the user's current binding, for tooltips. */
   const tip = (label: string, id: ShortcutId) =>
@@ -73,6 +83,14 @@ export function TitleBar() {
           <TbFolderPlus />
         </button>
         <button
+          className="tb-btn"
+          aria-label="Layout mode"
+          title={tip(`Layout: ${MODE_INFO[mode].label}. Click for the next layout`, 'tileCycleLayout')}
+          onClick={() => cycleLayoutMode()}
+        >
+          {MODE_INFO[mode].icon}
+        </button>
+        <button
           className={`tb-btn ${state.workspaces.fullscreen ? 'on' : ''}`}
           aria-label="Fullscreen panel"
           title={canTile || state.workspaces.fullscreen
@@ -106,7 +124,7 @@ export function TitleBar() {
         <button
           className="tb-btn"
           aria-label="Close window"
-          title="Close Canopy"
+          title={state.settings.background.closeToTray ? 'Hide to the tray (Canopy keeps running)' : 'Close Canopy'}
           onClick={() => safeCall(() => getCurrentWindow().close())}
           style={{ padding: '4px 6px', marginLeft: '2px' }}
         >

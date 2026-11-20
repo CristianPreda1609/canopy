@@ -76,3 +76,37 @@ test('serialize / deserialize by path survives new ids and dropped folders', () 
   assert.equal(deserialize({ type: 'bogus' }, () => 'x'), null);
   assert.equal(deserialize('junk', () => 'x'), null);
 });
+
+test('balanced grid: equal sizes, rows fill left to right', async () => {
+  const { buildBalanced } = await import('./layout.ts');
+  const r2 = layoutRects(buildBalanced(['a', 'b']));
+  assert.deepEqual([r2.a.w, r2.b.w, r2.a.h], [0.5, 0.5, 1], '2 -> side by side');
+  const r3 = layoutRects(buildBalanced(['a', 'b', 'c']));
+  assert.deepEqual([r3.a.w, r3.b.w, r3.c.w, r3.a.h, r3.c.h], [0.5, 0.5, 1, 0.5, 0.5], '3 -> 2 on top, 1 full width');
+  const r4 = layoutRects(buildBalanced(['a', 'b', 'c', 'd']));
+  assert.ok(['a', 'b', 'c', 'd'].every(k => r4[k].w === 0.5 && r4[k].h === 0.5), '4 -> 2x2');
+  const r5 = layoutRects(buildBalanced(['a', 'b', 'c', 'd', 'e']));
+  assert.equal(r5.a.w.toFixed(3), (1 / 3).toFixed(3), '5 -> 3 + 2');
+  assert.equal(r5.e.w, 0.5);
+  assert.equal(buildBalanced([]), null);
+});
+
+test('master layout: big first panel, rest stacked', async () => {
+  const { buildMaster } = await import('./layout.ts');
+  const r = layoutRects(buildMaster(['m', 'x', 'y', 'z']));
+  assert.equal(r.m.w, 0.55);
+  assert.equal(r.m.h, 1);
+  assert.ok(['x', 'y', 'z'].every(k => Math.abs(r[k].h - 1 / 3) < 1e-9 && Math.abs(r[k].w - 0.45) < 1e-9));
+  assert.deepEqual(buildMaster(['solo']), leaf('solo'));
+});
+
+test('relayout keeps panel order; balance equalizes a resized tree', async () => {
+  const { relayout, balance } = await import('./layout.ts');
+  const t = abc();                                   // dwindle a | (b / c)
+  assert.deepEqual(leaves(relayout(t, 'balanced')), ['a', 'b', 'c']);
+  assert.equal(relayout(t, 'dwindle'), t, 'dwindle keeps its own tree');
+  let resized = resize(t, 'a', 'right')!;
+  resized = resize(resized, 'a', 'right')!;
+  assert.equal(layoutRects(resized).a.w.toFixed(2), '0.60');
+  assert.deepEqual(layoutRects(balance(resized)).a, { x: 0, y: 0, w: 0.5, h: 1 });
+});

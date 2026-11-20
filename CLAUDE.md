@@ -44,6 +44,13 @@ Before finishing a change, run what CI runs for whatever you touched: `npm run l
 - The Rust toolchain is pinned in `src-tauri/rust-toolchain.toml` (CI uses the same file). To upgrade, bump it, then fix any new Clippy lints before pushing.
 - `macOSPrivateApi` is on (Cargo feature `macos-private-api`) for the transparent window. Keep both in sync.
 
+## Background mode (src-tauri/src/background.rs)
+
+- Tray, close-to-tray, global summon shortcut, window modes, start at login. Options come from Settings via `set_background_options`.
+- **Never hold the `BackgroundState` mutex while calling window APIs** (`hide`, `set_fullscreen`, `set_always_on_bottom`, …): they can fire window events synchronously, re-entering `on_window_event` and deadlocking. Copy values out (`snapshot`) first.
+- Test exes must be built with `npx @tauri-apps/cli@2 build --no-bundle` (or `cargo tauri build`). Plain `cargo build --release` produces a dev build that loads `http://localhost:5173` and shows "can't reach this page" without the dev server.
+- Don't drive the desktop app with injected keystrokes (SendKeys) in tests: if Windows refuses to focus it, the keys go to whatever window is in front.
+
 ## Releases & updates
 
 - Version lives in `src-tauri/tauri.conf.json` (`version`) and `src-tauri/Cargo.toml`; keep them equal. Tag `vX.Y.Z` → `release.yml` builds a **draft** release; it must be published for the updater to see it.

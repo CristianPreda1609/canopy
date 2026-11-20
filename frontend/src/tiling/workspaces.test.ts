@@ -54,3 +54,18 @@ test('save and restore by path, placing unknown panels on workspace 1', () => {
   assert.deepEqual(leaves(fromJunk.layouts[1]), ['A']);
   assert.equal(fromJunk.active, 1);
 });
+
+test('balanced mode re-arranges on add, remove and move', async () => {
+  const { layoutRects } = await import('./layout.ts');
+  const { relayoutAll } = await import('./workspaces.ts');
+  let ws = emptyWorkspaces();
+  for (const id of ['a', 'b', 'c', 'd']) ws = addPanel(ws, id, undefined, 'balanced');
+  const grid = layoutRects(activeLayout(ws));
+  assert.ok(['a', 'b', 'c', 'd'].every(k => grid[k].w === 0.5 && grid[k].h === 0.5), '4 panels -> 2x2, nothing tiny');
+  ws = removePanel(ws, 'd', 'balanced');
+  assert.equal(layoutRects(activeLayout(ws)).c.w, 1, '3 panels -> last row full width');
+  ws = moveToWorkspace(ws, 'c', 2, 'balanced');
+  assert.deepEqual(layoutRects(ws.layouts[1]).a, { x: 0, y: 0, w: 0.5, h: 1 });
+  const master = relayoutAll(ws, 'master');
+  assert.equal(layoutRects(master.layouts[1]).a.w, 0.55);
+});

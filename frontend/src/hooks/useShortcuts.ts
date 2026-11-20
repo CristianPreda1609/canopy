@@ -44,6 +44,8 @@ export function useShortcuts() {
         ['toggleLayout', c.toggleSplitDir],
         ['tileFullscreen', c.toggleFullscreen],
         ['tileToggleSplit', c.toggleSplitDir],
+        ['tileCycleLayout', c.cycleLayoutMode],
+        ['tileBalance', c.balanceLayout],
         ['prevPanel', () => { c.cyclePanel(-1); scrollSelectionIntoView(); }],
         ['nextPanel', () => { c.cyclePanel(1); scrollSelectionIntoView(); }],
       ];
