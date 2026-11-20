@@ -7,7 +7,7 @@
 
 export type ShortcutId =
   | 'palette' | 'quickOpen' | 'settings' | 'addPanel' | 'closePanel'
-  | 'toggleLayout' | 'nextPanel' | 'prevPanel' | 'focusPanel' | 'shortcutsHelp';
+  | 'toggleLayout' | 'nextPanel' | 'prevPanel' | 'focusPanel' | 'shortcutsHelp' | 'summon';
 
 export const KEYMAP: Record<ShortcutId, { combo: string; label: string }> = {
   palette:      { combo: 'Mod+Shift+P', label: 'Command palette' },
@@ -20,6 +20,8 @@ export const KEYMAP: Record<ShortcutId, { combo: string; label: string }> = {
   prevPanel:    { combo: 'Mod+Shift+Tab', label: 'Previous panel' },
   focusPanel:   { combo: 'Mod+1…9',     label: 'Go to panel 1–9' },
   shortcutsHelp: { combo: 'F1',         label: 'Keyboard shortcuts' },
+  /** Global: registered with the OS, works even when Canopy is hidden */
+  summon:       { combo: 'Mod+Shift+Space', label: 'Show / hide Canopy (from any app)' },
 };
 
 /** Keys handled by the focused tree (no modifiers). Shown in docs/palette. */
@@ -56,6 +58,7 @@ export type KeyLike = Pick<KeyboardEvent, 'key' | 'code' | 'ctrlKey' | 'metaKey'
  * so we read the physical key from e.code ("KeyH" -> "h", "Digit3" -> "3").
  */
 export function pressedKey(e: KeyLike): string {
+  if (e.key === ' ') return 'Space';
   if (e.altKey && e.code) {
     const m = /^(?:Key([A-Z])|Digit([0-9]))$/.exec(e.code);
     if (m) return (m[1] ?? m[2]).toLowerCase();

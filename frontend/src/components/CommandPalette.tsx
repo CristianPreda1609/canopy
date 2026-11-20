@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useAppContext } from '../contexts/AppContext';
 import { targetPaths, fileManagerName } from '../services/paths';
-import { openInVSCode, openTerminal, openInExplorer, revealInExplorer, copyToClipboard } from '../services/tauri';
+import { openInVSCode, openTerminal, openInExplorer, revealInExplorer, copyToClipboard, quitApp } from '../services/tauri';
 import { comboFor, formatCombo, type ShortcutId } from '../keymap';
 import { fuzzyFilter } from '../fuzzy';
 import {
@@ -16,6 +16,8 @@ import {
   TbCopy,
   TbSquareX,
   TbKeyboard,
+  TbPower,
+  TbLayoutBottombar,
   TbPalette,
   TbDownload,
   TbRefresh,
@@ -61,6 +63,8 @@ export function CommandPalette() {
     { id: 'settings', label: 'Settings', icon: <TbSettings />, action: () => toggleSettings(), shortcut: 'settings' },
     { id: 'shortcuts', label: 'Keyboard shortcuts', icon: <TbKeyboard />, action: () => toggleSettings('shortcuts'), shortcut: 'shortcutsHelp' },
     { id: 'git-colors', label: 'Change git colors', icon: <TbPalette />, action: () => toggleSettings('git') },
+    { id: 'background', label: 'Background mode & tray settings', icon: <TbLayoutBottombar />, action: () => toggleSettings('general') },
+    { id: 'quit', label: 'Quit Canopy', icon: <TbPower />, action: () => { quitApp().catch(console.error); } },
     state.update.status === 'available'
       ? { id: 'install-update', label: `Install update v${state.update.version} and restart`, icon: <TbDownload />, action: installUpdate }
       : { id: 'check-updates', label: 'Check for updates', icon: <TbRefresh />, action: () => checkUpdates(true) },

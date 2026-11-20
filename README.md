@@ -51,6 +51,7 @@ Canopy is built with **[Tauri 2](https://tauri.app/)**, so it uses a native Rust
 
 - 📂 **Multi-panel workspace**: open any number of project folders, each in its own panel.
 - 🌲 **Fast, lazy file tree**: only the first few levels load up front, and deeper folders load when you expand them, so huge repos open instantly. Folders come first, sorted alphabetically. Heavy folders such as `node_modules` and `target` aren't scanned until you open them.
+- 🌙 **Background mode**: lives in the system tray, keeps running when closed, and comes up from any app with **`Ctrl+Shift+Space`**. It can run fullscreen, or as a fullscreen "desktop" **behind** your other windows, and optionally start with Windows.
 - ⚙️ **Settings**: scan depth, hidden files, skipped folders, **custom git colors**, and **rebindable shortcuts** with a built-in shortcuts guide (`F1`).
 - 🗜️ **Compact folders**: chains of single-child folders are merged into one row (`src / main / java`), the same way VS Code does it.
 - 🔄 **Live reload**: a file watcher on each panel refreshes the tree when files are created, modified or deleted.
@@ -294,6 +295,20 @@ Copy `icons/64x64.png` to `frontend/public/favicon.png` and `icons/128x128.png` 
 4. Right-click any file or folder, or hold **Ctrl** while hovering over it, to open the context menu.
 5. Close a panel with the **×** in its header. Your open panels are restored the next time you start Canopy.
 
+### Background mode & tray
+
+Canopy can live in the background like a launcher:
+
+- **System tray icon** (next to the clock): click to show or hide; right-click for **Quit**.
+- **Closing the window hides it to the tray.** Turn this off in Settings → General → *Keep running in the tray*. Quit for real from the tray menu or the palette (**Quit Canopy**).
+- **`Ctrl+Shift+Space` from any app** shows Canopy, and pressing it again hides it. You can rebind it in Settings → Shortcuts.
+- **Window mode** (Settings → General):
+  - **Normal window**
+  - **Fullscreen**
+  - **Background**: fullscreen *behind* your other windows. The shortcut brings it forward; press it again (or click your other app) and it goes back behind, returning focus to what you were doing.
+- **Start with Windows / at login** (off by default).
+- Opening Canopy again while it's already running just brings up the running copy.
+
 ### Keyboard Shortcuts
 
 Canopy can be used entirely from the keyboard. On macOS, use `⌘` instead of `Ctrl`.
@@ -313,6 +328,7 @@ Press **`F1`** for the shortcuts guide. To **change any app shortcut**, open Set
 | `Ctrl+1` … `Ctrl+9` | Jump to panel 1–9 |
 | `Ctrl+Tab` / `Ctrl+Shift+Tab` | Next / previous panel |
 | `F1` | Keyboard shortcuts guide |
+| `Ctrl+Shift+Space` | Show / hide Canopy **from any app** (global) |
 | `Esc` | Close the palette, dialog or context menu |
 
 **File tree** (active panel)

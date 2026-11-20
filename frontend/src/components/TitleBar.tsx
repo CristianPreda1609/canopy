@@ -69,7 +69,7 @@ export function TitleBar() {
         <button
           className="tb-btn"
           aria-label="Close window"
-          title="Close Canopy"
+          title={state.settings.background.closeToTray ? 'Hide to the tray (Canopy keeps running)' : 'Close Canopy'}
           onClick={() => safeCall(() => getCurrentWindow().close())}
           style={{ padding: '4px 6px', marginLeft: '2px' }}
         >

@@ -74,6 +74,14 @@ test('comboFromEvent works with real (getter-based) events', async () => {
   assert.equal(comboFromEvent(new FakeKeyboardEvent(ev('F5')), false), 'F5');
 });
 
+test('Space has a readable name in combos', async () => {
+  const { comboFromEvent, pressedKey, formatCombo } = await import('./keymap.ts');
+  assert.equal(pressedKey(ev(' ')), 'Space');
+  assert.equal(comboFromEvent({ ...ev(' ', { ctrlKey: true, shiftKey: true }), code: 'Space' }, false), 'Mod+Shift+Space');
+  assert.ok(matchesCombo({ ...ev(' ', { ctrlKey: true, shiftKey: true }), code: 'Space' }, 'Mod+Shift+Space', false));
+  assert.equal(formatCombo('Mod+Shift+Space', false), 'Ctrl+Shift+Space');
+});
+
 test('custom bindings: recording, validation and conflicts', async () => {
   const { comboFromEvent, isValidBinding, findConflict, comboFor } = await import('./keymap.ts');
   assert.equal(comboFromEvent(ev('k', { ctrlKey: true, shiftKey: true }), false), 'Mod+Shift+K');

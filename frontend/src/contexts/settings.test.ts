@@ -25,6 +25,16 @@ test('normalizeSettings keeps only valid git colors and key bindings', () => {
   assert.deepEqual(s.keybindings, { settings: 'Mod+K', palette: 'F2' });
 });
 
+test('normalizeSettings validates background options', async () => {
+  const { DEFAULT_BACKGROUND } = await import('./settings.ts');
+  assert.deepEqual(normalizeSettings({}).background, DEFAULT_BACKGROUND);
+  assert.deepEqual(
+    normalizeSettings({ background: { windowMode: 'background', closeToTray: false, launchAtLogin: true } }).background,
+    { windowMode: 'background', closeToTray: false, launchAtLogin: true },
+  );
+  assert.equal(normalizeSettings({ background: { windowMode: 'tiny' } }).background.windowMode, 'normal');
+});
+
 test('gitColor falls back to defaults', async () => {
   const { gitColor, DEFAULT_GIT_COLORS } = await import('./settings.ts');
   const s = normalizeSettings({ gitColors: { staged: '#010203' } });

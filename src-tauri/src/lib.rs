@@ -1,4 +1,6 @@
 use serde::Serialize;
+
+mod background;
 use std::{path::Path, collections::HashMap, sync::Mutex, time::{Duration, Instant}};
 use notify::{Watcher, RecursiveMode, RecommendedWatcher, Config};
 use tauri::{Emitter, Manager};
@@ -543,16 +545,27 @@ fn unwatch_directory(
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        // Must be the first plugin: a second launch just shows the running instance
+        .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| background::show_window(app)))
         .manage(WatcherState{
             watchers: Mutex::new(HashMap::new()),
         })
+        .manage(background::BackgroundState::default())
         .plugin(tauri_plugin_dialog::init())
+        .on_window_event(background::on_window_event)
         .setup(|app| {
             // Auto-update + relaunch (desktop only; see plugins.updater in tauri.conf.json)
             #[cfg(desktop)]
             {
                 app.handle().plugin(tauri_plugin_updater::Builder::new().build())?;
                 app.handle().plugin(tauri_plugin_process::init())?;
+                // Background mode: tray icon, summon shortcut, start at login
+                app.handle().plugin(background::shortcut_plugin())?;
+                app.handle().plugin(tauri_plugin_autostart::init(
+                    tauri_plugin_autostart::MacosLauncher::LaunchAgent,
+                    None,
+                ))?;
+                background::create_tray(app.handle())?;
             }
             // Put keyboard focus inside the web content at startup, so
             // shortcuts work immediately without clicking the window first
@@ -580,6 +593,8 @@ pub fn run() {
             get_git_info,
             watch_directory,
             unwatch_directory,
+            background::set_background_options,
+            background::quit_app,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

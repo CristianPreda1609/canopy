@@ -1,7 +1,7 @@
 import { createContext, useState, useContext, useEffect, useRef } from "react";
 import type { ReactNode } from "react";
 import {
-  pickFolder, readDirectory, isTauri, getGitInfo, watchDirectory, unwatchDirectory, checkForUpdate,
+  pickFolder, readDirectory, isTauri, getGitInfo, watchDirectory, unwatchDirectory, checkForUpdate, setBackgroundOptions,
   type ScanOptions, type AvailableUpdate,
 } from "../services/tauri";
 import { resolveTreePath } from "../services/paths";
@@ -11,6 +11,7 @@ import {
   type TreeNode, type StaleFolder,
 } from "./tree";
 import { loadSettings, saveSettings, type Settings } from "./settings";
+import { comboFor } from "../keymap";
 
 export type { TreeNode } from "./tree";
 
@@ -91,6 +92,8 @@ export type AppState = {
   layout: Layout;
   settings: Settings;
   update: UpdateState;
+  /** Short message for the status bar (e.g. a shortcut that couldn't be registered) */
+  notice: string | null;
 };
 
 type AppContextType = {
@@ -216,6 +219,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     layout: loadLayout(),
     settings: loadSettings(),
     update: { status: 'idle' },
+    notice: null,
   });
 
   // Refs so async callbacks (watcher events, lazy loads) see current values
@@ -335,6 +339,27 @@ export function AppProvider({ children }: { children: ReactNode }) {
       Object.values(debounceTimers).forEach(clearTimeout);
     };
   }, []);
+
+  // ─── Notices ──────────────────────────────────────────────────────
+  const noticeTimer = useRef<number | undefined>(undefined);
+  const showNotice = (notice: string) => {
+    setState(prev => ({ ...prev, notice }));
+    clearTimeout(noticeTimer.current);
+    noticeTimer.current = setTimeout(() => setState(prev => ({ ...prev, notice: null })), 8000);
+  };
+
+  // ─── Background mode (tray, window mode, summon shortcut, start at login) ──
+  const bg = state.settings.background;
+  const summonCombo = comboFor('summon', state.settings.keybindings);
+  useEffect(() => {
+    if (!isTauri) return;
+    setBackgroundOptions({
+      closeToTray: bg.closeToTray,
+      windowMode: bg.windowMode,
+      summonShortcut: summonCombo,
+      launchAtLogin: bg.launchAtLogin,
+    }).catch(err => showNotice(String(err)));
+  }, [bg.closeToTray, bg.windowMode, bg.launchAtLogin, summonCombo]);
 
   // ─── Auto-update ──────────────────────────────────────────────────
   const pendingUpdate = useRef<AvailableUpdate | null>(null);

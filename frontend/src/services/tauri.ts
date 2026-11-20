@@ -107,6 +107,28 @@ export async function unwatchDirectory(panelId: string): Promise<void> {
 }
 export type FileList = { files: string[]; truncated: boolean };
 
+export type BackgroundOptions = {
+  closeToTray: boolean;
+  windowMode: 'normal' | 'fullscreen' | 'background';
+  /** Canopy combo format, e.g. "Mod+Shift+Space"; null disables it */
+  summonShortcut: string | null;
+  launchAtLogin: boolean;
+};
+
+/** Tray / window mode / global summon shortcut / start at login. Rejects with a readable message. */
+export async function setBackgroundOptions(options: BackgroundOptions): Promise<void> {
+  if (!isTauri) return;
+  const { invoke } = await import('@tauri-apps/api/core');
+  await invoke('set_background_options', { options });
+}
+
+/** Quit for real (the close button only hides to the tray). */
+export async function quitApp(): Promise<void> {
+  if (!isTauri) { console.log('[mock] Quit'); return; }
+  const { invoke } = await import('@tauri-apps/api/core');
+  await invoke('quit_app');
+}
+
 /** Every file under `path` (relative, `/`-separated), for "Go to file". */
 export async function listFiles(path: string, opts: Omit<ScanOptions, 'depth'> = {}): Promise<FileList> {
   if (!isTauri) {

@@ -3,8 +3,9 @@ import { TbSettings, TbX, TbRefresh, TbKeyboard, TbGitBranch, TbAdjustments } fr
 import { useAppContext, type SettingsTab } from '../contexts/AppContext';
 import {
   DEFAULT_SETTINGS, SCAN_DEPTH_MIN, SCAN_DEPTH_MAX, DEFAULT_GIT_COLORS, GIT_COLOR_LABELS,
-  normalizeSettings, gitColor, type Settings, type GitColorKey,
+  normalizeSettings, gitColor, type Settings, type GitColorKey, type WindowMode,
 } from '../contexts/settings';
+import { isWindows } from '../services/paths';
 import {
   KEYMAP, REFERENCE_SECTIONS, comboFor, comboFromEvent, findConflict, formatCombo, isRebindable,
   isValidBinding, shortcutRecorder, type ShortcutId,
@@ -103,6 +104,9 @@ function GeneralTab({ draft, setDraft, skipText, setSkipText }: TabProps & {
 }) {
   const [builtinSkips, setBuiltinSkips] = useState<string[]>([]);
   useEffect(() => { defaultSkipDirs().then(setBuiltinSkips).catch(console.error); }, []);
+  const setBackground = (patch: Partial<Settings['background']>) =>
+    setDraft({ ...draft, background: { ...draft.background, ...patch } });
+  const summon = formatCombo(comboFor('summon', draft.keybindings));
 
   return (
     <>
@@ -148,6 +152,52 @@ function GeneralTab({ draft, setDraft, skipText, setSkipText }: TabProps & {
         />
         {skipText === null && <div className="settings-hint">Using the built-in list. Edit to customize.</div>}
       </div>
+
+      <div className="shortcut-section">Background</div>
+      <label className="settings-row">
+        <div>
+          <div className="settings-label">Window mode</div>
+          <div className="settings-hint">
+            Background: fullscreen behind your other windows. {summon} brings it to the front, and clicking
+            back into your work sends it behind again.
+          </div>
+        </div>
+        <select
+          className="settings-input settings-select"
+          aria-label="Window mode"
+          value={draft.background.windowMode}
+          onChange={e => setBackground({ windowMode: e.target.value as WindowMode })}
+        >
+          <option value="normal">Normal window</option>
+          <option value="fullscreen">Fullscreen</option>
+          <option value="background">Background (behind other windows)</option>
+        </select>
+      </label>
+
+      <label className="settings-row">
+        <div>
+          <div className="settings-label">Keep running in the tray</div>
+          <div className="settings-hint">
+            Closing the window hides Canopy to the tray (next to the clock). Show it with {summon} or the tray icon;
+            quit from the tray menu.
+          </div>
+        </div>
+        <input
+          type="checkbox" className="settings-checkbox" checked={draft.background.closeToTray} aria-label="Keep running in the tray"
+          onChange={e => setBackground({ closeToTray: e.target.checked })}
+        />
+      </label>
+
+      <label className="settings-row">
+        <div>
+          <div className="settings-label">{isWindows ? 'Start with Windows' : 'Start at login'}</div>
+          <div className="settings-hint">Launch Canopy automatically when you sign in.</div>
+        </div>
+        <input
+          type="checkbox" className="settings-checkbox" checked={draft.background.launchAtLogin} aria-label="Start at login"
+          onChange={e => setBackground({ launchAtLogin: e.target.checked })}
+        />
+      </label>
     </>
   );
 }
